@@ -43,6 +43,12 @@ The first milestone establishes a reproducible simulation and an end-to-end, saf
 - `docs/` — architecture and validation criteria.
 - `tests/` — future automated and scenario-based tests.
 
+See [`docs/local_development.md`](docs/local_development.md) for the verified
+Ubuntu 24.04 WSL, ROS 2 Jazzy, and workspace setup.
+
 ## Current status
 
-This repository currently contains only the initial scaffold and planning documents. No dependencies, runtime configuration, or implementation code have been added.
+The local Ubuntu 24.04 development environment is configured with ROS 2 Jazzy
+and the ROS development tools. The official publisher/subscriber demo and the
+empty `ros2_ws` baseline build have passed. Isaac Sim, MoveIt 2, application
+packages, and cloud GPU infrastructure have not been configured yet.
