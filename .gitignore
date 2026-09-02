@@ -1,0 +1,62 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+.venv/
+venv/
+env/
+.env
+.env.*
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# ROS 2 and colcon
+ros2_ws/build/
+ros2_ws/install/
+ros2_ws/log/
+build/
+install/
+log/
+*.db3
+*.db3-wal
+*.db3-shm
+
+# Editors and operating-system temporary files
+.vscode/*.code-workspace
+.vscode/.ropeproject/
+.vscode/ipch/
+.vscode/.browse.VC.db*
+.vscode/*.log
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Logs and caches
+*.log
+logs/
+*.cache
+.cache/
+
+# Isaac Sim / Omniverse generated data and large artifacts
+isaac_sim/_output/
+isaac_sim/cache/
+isaac_sim/logs/
+isaac_sim/*.usd
+isaac_sim/*.usda
+isaac_sim/*.usdc
+isaac_sim/*.usdz
+isaac_sim/*.ov
+isaac_sim/*.hdf5
+isaac_sim/*.h5
+isaac_sim/*.npz
+isaac_sim/*.mp4
+isaac_sim/*.mov
+isaac_sim/*.png
+isaac_sim/*.jpg
+isaac_sim/*.jpeg
