@@ -52,6 +52,28 @@ class Phase1SceneConfigTest(unittest.TestCase):
             '/Isaac/Robots/FrankaRobotics/FrankaPanda/franka.usd',
         )
 
+    def test_ground_table_and_lighting_are_complete(self):
+        """Require a supported static workspace with visible lighting."""
+        ground = self.config['ground_plane']
+        table = self.config['table']
+        top = table['top']
+
+        self.assertEqual(len(ground['size']), 3)
+        self.assertTrue(all(size > 0 for size in ground['size']))
+        self.assertEqual(top['prim_path'], '/World/Table/Top')
+        self.assertEqual(len(table['legs']), 4)
+
+        top_bottom = top['center'][2] - top['size'][2] / 2.0
+        for leg in table['legs']:
+            leg_top = leg['center'][2] + leg['size'][2] / 2.0
+            leg_bottom = leg['center'][2] - leg['size'][2] / 2.0
+            self.assertAlmostEqual(leg_top, top_bottom)
+            self.assertGreaterEqual(leg_bottom, ground['height_m'])
+
+        light = self.config['lighting']
+        self.assertGreater(light['intensity'], 0.0)
+        self.assertEqual(len(light['color_rgb']), 3)
+
     def test_six_cubes_have_unique_identity_color_and_path(self):
         """Require six distinguishable manipulation objects."""
         cubes = self.config['cubes']

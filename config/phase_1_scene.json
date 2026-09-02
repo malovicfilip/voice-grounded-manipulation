@@ -14,15 +14,46 @@
   },
   "ground_plane": {
     "prim_path": "/World/GroundPlane",
-    "height_m": 0.0
+    "height_m": 0.0,
+    "size": [4.0, 4.0, 0.05],
+    "color_rgb": [0.18, 0.18, 0.18]
   },
   "table": {
     "prim_path": "/World/Table",
     "top": {
+      "prim_path": "/World/Table/Top",
       "center": [0.0, 0.0, 0.725],
-      "size": [1.2, 0.8, 0.05]
+      "size": [1.2, 0.8, 0.05],
+      "color_rgb": [0.35, 0.22, 0.12]
     },
+    "legs": [
+      {
+        "prim_path": "/World/Table/LegFrontLeft",
+        "center": [-0.5, -0.3, 0.35],
+        "size": [0.06, 0.06, 0.7]
+      },
+      {
+        "prim_path": "/World/Table/LegFrontRight",
+        "center": [-0.5, 0.3, 0.35],
+        "size": [0.06, 0.06, 0.7]
+      },
+      {
+        "prim_path": "/World/Table/LegRearLeft",
+        "center": [0.5, -0.3, 0.35],
+        "size": [0.06, 0.06, 0.7]
+      },
+      {
+        "prim_path": "/World/Table/LegRearRight",
+        "center": [0.5, 0.3, 0.35],
+        "size": [0.06, 0.06, 0.7]
+      }
+    ],
     "surface_height_m": 0.75
+  },
+  "lighting": {
+    "prim_path": "/World/Lighting/DomeLight",
+    "intensity": 1000.0,
+    "color_rgb": [1.0, 1.0, 1.0]
   },
   "robot": {
     "object_id": "franka_panda",

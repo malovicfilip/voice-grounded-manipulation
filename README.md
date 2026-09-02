@@ -41,7 +41,7 @@ The first milestone establishes a reproducible simulation and an end-to-end, saf
 - `ros2_ws/` — ROS 2 Jazzy workspace source tree.
 - `config/` — shared configuration files.
 - `docs/` — architecture and validation criteria.
-- `tests/` — future automated and scenario-based tests.
+- `tests/` — automated offline and future simulation acceptance tests.
 
 See [`docs/local_development.md`](docs/local_development.md) for the verified
 Ubuntu 24.04 WSL, ROS 2 Jazzy, and workspace setup.
@@ -50,5 +50,8 @@ Ubuntu 24.04 WSL, ROS 2 Jazzy, and workspace setup.
 
 The local Ubuntu 24.04 development environment is configured with ROS 2 Jazzy
 and the ROS development tools. The official publisher/subscriber demo and the
-empty `ros2_ws` baseline build have passed. Isaac Sim, MoveIt 2, application
-packages, and cloud GPU infrastructure have not been configured yet.
+empty `ros2_ws` baseline build have passed. The versioned Phase 1 scene contract
+and its Isaac Sim 6.0 builder pass all simulator-independent tests. AWS GPU
+quota approval is pending; no instance has been launched and no cloud cost has
+been incurred. Isaac Sim, MoveIt 2, and application packages have not been
+installed yet.
