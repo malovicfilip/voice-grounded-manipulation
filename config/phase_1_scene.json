@@ -1,0 +1,113 @@
+{
+  "schema_version": 1,
+  "scene_id": "phase_1_franka_rgbd",
+  "units": "meters",
+  "physics": {
+    "gravity_m_s2": [0.0, 0.0, -9.81],
+    "physics_hz": 60,
+    "render_hz": 30
+  },
+  "assets": {
+    "franka_panda": {
+      "relative_usd_path": "/Isaac/Robots/FrankaRobotics/FrankaPanda/franka.usd"
+    }
+  },
+  "ground_plane": {
+    "prim_path": "/World/GroundPlane",
+    "height_m": 0.0
+  },
+  "table": {
+    "prim_path": "/World/Table",
+    "top": {
+      "center": [0.0, 0.0, 0.725],
+      "size": [1.2, 0.8, 0.05]
+    },
+    "surface_height_m": 0.75
+  },
+  "robot": {
+    "object_id": "franka_panda",
+    "prim_path": "/World/Franka",
+    "asset_key": "franka_panda",
+    "base_pose": {
+      "position": [-0.45, 0.0, 0.75],
+      "yaw_degrees": 0.0
+    }
+  },
+  "camera": {
+    "sensor_id": "workspace_rgbd",
+    "prim_path": "/World/WorkspaceCamera",
+    "frame_id": "workspace_camera_optical_frame",
+    "position": [0.35, -1.1, 1.35],
+    "look_at": [0.05, 0.0, 0.75],
+    "resolution": [640, 480],
+    "clipping_range_m": [0.05, 5.0],
+    "streams": {
+      "rgb": true,
+      "depth": true
+    }
+  },
+  "cubes": [
+    {
+      "object_id": "red_cube",
+      "prim_path": "/World/Objects/RedCube",
+      "position": [-0.1, -0.18, 0.775],
+      "size_m": 0.05,
+      "mass_kg": 0.08,
+      "color_rgb": [0.8, 0.05, 0.05]
+    },
+    {
+      "object_id": "green_cube",
+      "prim_path": "/World/Objects/GreenCube",
+      "position": [0.1, -0.18, 0.775],
+      "size_m": 0.05,
+      "mass_kg": 0.08,
+      "color_rgb": [0.05, 0.65, 0.1]
+    },
+    {
+      "object_id": "blue_cube",
+      "prim_path": "/World/Objects/BlueCube",
+      "position": [0.3, -0.18, 0.775],
+      "size_m": 0.05,
+      "mass_kg": 0.08,
+      "color_rgb": [0.05, 0.2, 0.85]
+    },
+    {
+      "object_id": "yellow_cube",
+      "prim_path": "/World/Objects/YellowCube",
+      "position": [-0.1, 0.18, 0.775],
+      "size_m": 0.05,
+      "mass_kg": 0.08,
+      "color_rgb": [0.9, 0.75, 0.05]
+    },
+    {
+      "object_id": "magenta_cube",
+      "prim_path": "/World/Objects/MagentaCube",
+      "position": [0.1, 0.18, 0.775],
+      "size_m": 0.05,
+      "mass_kg": 0.08,
+      "color_rgb": [0.8, 0.05, 0.65]
+    },
+    {
+      "object_id": "cyan_cube",
+      "prim_path": "/World/Objects/CyanCube",
+      "position": [0.3, 0.18, 0.775],
+      "size_m": 0.05,
+      "mass_kg": 0.08,
+      "color_rgb": [0.05, 0.75, 0.8]
+    }
+  ],
+  "constraints": {
+    "expected_cube_count": 6,
+    "minimum_cube_center_separation_m": 0.1,
+    "table_edge_clearance_m": 0.05,
+    "forbidden_control_fields": [
+      "joint_targets",
+      "joint_velocities",
+      "motor_commands",
+      "efforts",
+      "torques",
+      "trajectory",
+      "trajectories"
+    ]
+  }
+}

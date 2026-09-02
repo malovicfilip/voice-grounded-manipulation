@@ -2,9 +2,18 @@
 
 Phase 1 is accepted only when the following tests pass in simulation. These tests establish the control boundary before perception, voice input, or multi-step autonomy are introduced.
 
+The versioned scene contract is [`config/phase_1_scene.json`](../config/phase_1_scene.json).
+It fixes the coordinate system, physics rates, Franka asset, table geometry, six
+cube identities and poses, and RGB-D camera requirements before simulator code
+is executed. Its simulator-independent checks run locally with:
+
+```bash
+python3 -m unittest tests/test_phase_1_scene_config.py -v
+```
+
 ## Environment and integration
 
-1. **Isaac Sim scene starts:** The project can open the baseline scene containing a Franka Panda, a stable world frame, and a known workspace.
+1. **Isaac Sim scene starts:** The project can construct and open the baseline scene from the versioned contract with a Franka Panda, a stable world frame, a table, exactly six uniquely identified colored cubes, and an RGB-D camera.
 2. **ROS 2 Jazzy connectivity:** Required simulation, robot-state, transform, and control interfaces are discoverable and exchange messages with expected timestamps.
 3. **MoveIt 2 model alignment:** MoveIt 2 receives the Panda joint state and transform tree, and its planning model matches the simulated robot configuration.
 4. **Safe simulated execution:** MoveIt 2 can plan and execute an approved, collision-free movement between predefined safe poses. The execution result and final robot state agree within configured tolerances.
