@@ -81,14 +81,18 @@ class Phase1SceneBuilderTest(unittest.TestCase):
         self.assertIn('close(skip_cleanup=True, exit_code=exit_code)', source)
 
     def test_rtx_camera_authors_required_sensor_schema(self):
-        """Let RtxCamera create the prim and apply OmniSensorAPI."""
+        """Let RtxCamera author the prim, sensor schema, and runtime pose."""
         source = BUILDER_PATH.read_text(encoding='utf-8')
         camera_source = source.split('def _create_camera', maxsplit=1)[1]
-        camera_source = camera_source.split('def _build_scene', maxsplit=1)[0]
+        camera_source = camera_source.split('def _author_scene', maxsplit=1)[0]
         self.assertLess(
             camera_source.index('rtx_camera = RtxCamera('),
             camera_source.index('camera = UsdGeom.Camera('),
         )
+        self.assertIn('look_at_quaternion(', camera_source)
+        self.assertIn('positions=position', camera_source)
+        self.assertIn('orientations=orientation', camera_source)
+        self.assertNotIn('MakeMatrixXform', camera_source)
 
 
 if __name__ == '__main__':

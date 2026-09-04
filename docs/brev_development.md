@@ -257,6 +257,65 @@ public application ports have been opened. See NVIDIA's
 [container installation guide](https://docs.isaacsim.omniverse.nvidia.com/6.0.1/installation/install_container.html)
 and [RTX camera API](https://docs.isaacsim.omniverse.nvidia.com/6.0.1/py/source/extensions/isaacsim.sensors.experimental.rtx/docs/index.html).
 
+## Phase 1 visual demo
+
+Run the repository launcher from the Brev checkout:
+
+```bash
+cd /home/ubuntu/workspace
+ACCEPT_EULA=Y isaac_sim/scripts/run_phase_1_demo.sh
+```
+
+`ACCEPT_EULA=Y` records the NVIDIA license acceptance for the container run.
+The launcher authors and saves `phase_1_scene.usd` from the checked-in JSON
+contract, then reads one frame from that live stage with Isaac Sim 6.0.1's
+`CameraSensor`. RGB is stored as PNG. Depth remains a floating-point NumPy array
+in meters, with a separately generated colorized PNG for visual inspection.
+`PRIVACY_CONSENT` is not set, and no network ports are published.
+
+The final console line identifies a unique directory such as:
+
+```text
+/home/ubuntu/workspace/isaac_sim/_output/demo-20260904T041500Z
+```
+
+Inspect the manifest and copy the small generated directory back to WSL:
+
+```bash
+ssh vgm-isaac-dev \
+  'cat /home/ubuntu/workspace/isaac_sim/_output/<demo-id>/manifest.json'
+scp -r \
+  vgm-isaac-dev:/home/ubuntu/workspace/isaac_sim/_output/<demo-id> \
+  isaac_sim/_output/
+```
+
+`ssh ... cat` displays the recorded resolution, scene, artifact names, and
+observed depth range. `scp -r` transfers only that ignored demo directory over
+the authenticated SSH connection; it does not expose a listening port.
+
+The first verified L4 capture spent about six minutes inside Isaac Sim's first
+render update before completing. During that interval the process can remain
+CPU-bound with low GPU utilization. NVIDIA notes that robot assets may take
+multiple minutes to load on first use, and Isaac Sim 6.0.1 has a reported
+`simulation_app.update()` livelock that can recover without an application
+error. Do not accept a run based on process activity alone: require a zero exit
+status, `manifest.json` with `status: captured`, a nonempty RGB image, and a
+finite positive depth range. See NVIDIA's
+[Isaac Sim asset guidance](https://docs.isaacsim.omniverse.nvidia.com/6.0.1/assets/usd_assets_overview.html)
+and the upstream
+[Isaac Sim 6.0.1 update issue](https://github.com/isaac-sim/IsaacSim/issues/728).
+
+The first accepted run produced a 640 x 480 RGB image and metric depth from
+approximately 0.993 m to 1.743 m. The workspace camera is intentionally framed
+for the six manipulation cubes; this sensor demo does not command or animate
+the Franka.
+
+An interactive WebRTC session is a separate option. NVIDIA documents TCP 49100
+for signaling and UDP 47998 for video, and warns that the stream has no built-in
+authentication or encryption. Do not expose those ports without restricting
+them to the viewer's public IP and obtaining explicit approval first. See the
+[Isaac Sim container streaming guide](https://docs.isaacsim.omniverse.nvidia.com/6.0.1/installation/install_container.html).
+
 ## Session shutdown
 
 Commit and push all work, stop the instance, and verify its state:

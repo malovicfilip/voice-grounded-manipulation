@@ -49,6 +49,23 @@ Ubuntu 24.04 WSL, ROS 2 Jazzy, and workspace setup.
 See [`docs/brev_development.md`](docs/brev_development.md) for the NVIDIA Brev
 GPU environment, cost guard, SSH/VS Code connection, and persistence workflow.
 
+## Phase 1 visual demo
+
+On the configured Brev instance, generate RGB and metric-depth evidence from
+the real Isaac Sim scene without commanding the robot:
+
+```bash
+cd /home/ubuntu/workspace
+ACCEPT_EULA=Y isaac_sim/scripts/run_phase_1_demo.sh
+```
+
+The launcher rebuilds the versioned scene, captures one 640 x 480 RGB-D frame,
+and prints the unique, git-ignored output directory. Each run contains an RGB
+PNG, raw metric depth as NumPy data, a viewable depth PNG, and `manifest.json`.
+It does not publish network ports or call any robot-control interface. See the
+[Brev demo runbook](docs/brev_development.md#phase-1-visual-demo) for artifact
+copy and inspection commands.
+
 ## Current status
 
 The local Ubuntu 24.04 development environment is configured with ROS 2 Jazzy
@@ -58,5 +75,6 @@ and its builder pass all simulator-independent tests. A stoppable NVIDIA Brev
 GPU environment has been verified with an NVIDIA L4, 8 CPUs, 32 GiB system RAM,
 and persistent project storage under `/home/ubuntu/workspace`. The official
 Isaac Sim 6.0.1 container passes NVIDIA's compatibility checker on that GPU, and
-the Phase 1 Franka/RGB-D scene builds successfully in headless mode. MoveIt 2
-and application packages have not been installed yet.
+the Phase 1 Franka/RGB-D scene builds successfully in headless mode. The visual
+demo captures RGB and metric-depth evidence without robot motion. MoveIt 2 and
+application packages have not been installed yet.

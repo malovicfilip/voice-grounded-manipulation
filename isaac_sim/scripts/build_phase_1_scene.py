@@ -235,25 +235,25 @@ def _create_cubes(stage, config):
 def _create_camera(stage, config):
     """Create an Isaac Sim 6.0 RTX camera with RGB and depth outputs."""
     import isaacsim.core.experimental.utils.transform as transform_utils
+    import numpy as np
     from isaacsim.sensors.experimental.rtx import CameraSensor, RtxCamera
     from pxr import Gf, Sdf, UsdGeom
 
     camera_config = config['camera']
+    position = np.asarray(camera_config['position'], dtype=np.float32)
+    orientation = transform_utils.look_at_quaternion(
+        eye=position,
+        target=np.asarray(camera_config['look_at'], dtype=np.float32),
+    ).numpy()
     rtx_camera = RtxCamera(
         camera_config['prim_path'],
         tick_rate=float(config['physics']['render_hz']),
-        reset_xform_op_properties=False,
+        positions=position,
+        orientations=orientation,
     )
     camera = UsdGeom.Camera(
         stage.GetPrimAtPath(camera_config['prim_path'])
     )
-    transform = transform_utils.look_at_matrix(
-        eye=camera_config['position'],
-        target=camera_config['look_at'],
-    )
-    xformable = UsdGeom.Xformable(camera.GetPrim())
-    xformable.ClearXformOpOrder()
-    xformable.MakeMatrixXform().Set(transform)
 
     near, far = camera_config['clipping_range_m']
     camera.CreateClippingRangeAttr(Gf.Vec2f(near, far))
@@ -273,6 +273,32 @@ def _create_camera(stage, config):
     return sensor
 
 
+def _author_scene(config):
+    """Author the validated Phase 1 stage in the active Isaac Sim app."""
+    import isaacsim.core.experimental.utils.stage as stage_utils
+    from isaacsim.storage.native import get_assets_root_path
+    from pxr import UsdGeom
+
+    stage_utils.create_new_stage()
+    stage = stage_utils.get_current_stage()
+    UsdGeom.SetStageMetersPerUnit(stage, 1.0)
+    UsdGeom.SetStageUpAxis(stage, UsdGeom.Tokens.z)
+    world = UsdGeom.Xform.Define(stage, '/World')
+    stage.SetDefaultPrim(world.GetPrim())
+    stage.SetTimeCodesPerSecond(config['physics']['physics_hz'])
+
+    assets_root = get_assets_root_path()
+    if not assets_root:
+        raise RuntimeError('Isaac Sim assets root is unavailable')
+
+    _create_physics(stage, config)
+    _create_static_workspace(stage, config)
+    _create_robot(stage, config, assets_root)
+    _create_cubes(stage, config)
+    camera_sensor = _create_camera(stage, config)
+    return stage, camera_sensor
+
+
 def _build_scene(config, output_path, headless, summary):
     """Launch Isaac Sim, author the scene, and save the resulting USD."""
     from isaacsim import SimulationApp
@@ -281,26 +307,8 @@ def _build_scene(config, output_path, headless, summary):
     exit_code = 0
     try:
         import isaacsim.core.experimental.utils.stage as stage_utils
-        from isaacsim.storage.native import get_assets_root_path
-        from pxr import UsdGeom
 
-        stage_utils.create_new_stage()
-        stage = stage_utils.get_current_stage()
-        UsdGeom.SetStageMetersPerUnit(stage, 1.0)
-        UsdGeom.SetStageUpAxis(stage, UsdGeom.Tokens.z)
-        world = UsdGeom.Xform.Define(stage, '/World')
-        stage.SetDefaultPrim(world.GetPrim())
-        stage.SetTimeCodesPerSecond(config['physics']['physics_hz'])
-
-        assets_root = get_assets_root_path()
-        if not assets_root:
-            raise RuntimeError('Isaac Sim assets root is unavailable')
-
-        _create_physics(stage, config)
-        _create_static_workspace(stage, config)
-        _create_robot(stage, config, assets_root)
-        _create_cubes(stage, config)
-        camera_sensor = _create_camera(stage, config)
+        stage, camera_sensor = _author_scene(config)
         simulation_app.update()
 
         output_path.parent.mkdir(parents=True, exist_ok=True)
