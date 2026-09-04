@@ -8,6 +8,7 @@ import sys
 import tempfile
 import time
 import unittest
+import jsonschema
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "ros2_ws/src/vgm_runtime"))
 from vgm_runtime.audit import AuditLogger
@@ -180,6 +181,17 @@ class TaskTests(unittest.TestCase):
         legacy = scene.to_mapping()
         del legacy["held_object_id"]
         self.assertIsNone(scene_from_mapping(legacy).held_object_id)
+    def test_task_json_schema_rejects_irrelevant_inspect_parameters(self):
+        value = {"schema_version": 1, "request_id": "schema_regression",
+                 "scene_revision": "0123456789abcdef", "steps": [step("inspect", "red_cube")]}
+        jsonschema.Draft202012Validator.check_schema(task_schema())
+        jsonschema.validate(value, task_schema())
+        for extra in ({"reason": "inspect without motion"}, {"target_id": "blue_target"},
+                      {"pose_name": "ready"}, {"joint_positions": [0.0]}):
+            bad = copy.deepcopy(value)
+            bad["steps"][0].update(extra)
+            with self.assertRaises(jsonschema.ValidationError):
+                jsonschema.validate(bad, task_schema())
     def test_serialized_sensor_numbers_frames_and_extra_fields_are_rejected(self):
         for change in ({"confidence": float("nan")}, {"confidence": True},
                        {"frame_id": "camera"}, {"position_m": ["0", 0, 0]}):

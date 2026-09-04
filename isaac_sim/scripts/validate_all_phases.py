@@ -130,8 +130,25 @@ def fault(backend):
     return {"refusal": refusal, "events": events["events"], "robot": state, "recovery": recovery}
 
 
-def task(backend, audit, transcript):
-    session = TaskSession(OpenAITaskModel(), backend, audit)
+class FixtureTaskModel:
+    """Fixed task fixtures for simulator-only acceptance without an API call."""
+    def propose(self, transcript, scene, policy):
+        def step(skill, target=None):
+            return {"skill": skill, "object_id": "red_cube", "target_id": target,
+                    "pose_name": None, "reason": None}
+        if transcript.startswith("Inspect the red cube. Then pick"):
+            steps = [step("inspect"), step("pick"), step("place", "yellow_target"), step("inspect")]
+        elif transcript.strip().lower().rstrip(".") == "pick the red cube and place it on the blue target":
+            steps = [step("pick_and_place", "blue_target")]
+        else:
+            raise ValueError("transcript does not match an acceptance fixture")
+        return {"schema_version": 1, "request_id": "fixture_" + uuid.uuid4().hex[:16],
+                "scene_revision": scene.revision, "steps": steps}
+
+
+def task(backend, audit, transcript, provider="openai"):
+    model = OpenAITaskModel() if provider == "openai" else FixtureTaskModel()
+    session = TaskSession(model, backend, audit)
     pending = session.prepare(transcript)
     require(pending["status"] == "awaiting_confirmation", f"task was not confirmable: {pending}")
     # Running this acceptance script authorizes its explicit, fixed test tasks.
@@ -160,24 +177,29 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--session", required=True)
     parser.add_argument("--audio", type=Path)
+    parser.add_argument("--provider", choices=("openai", "rules"), default="openai")
     parser.add_argument("--suite", choices=("all", "boundary", "stop", "fault", "voice", "sequence", "dialogue"), default="all")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
+    if args.provider == "rules" and args.suite in {"all", "dialogue"}:
+        parser.error("dialogue/all acceptance requires the real OpenAI provider")
     if args.suite in {"all", "voice"} and args.audio is None:
         parser.error("voice acceptance requires --audio with the red-cube-to-blue-target command")
     backend = SSHBackend(args.session)
     audit = AuditLogger(args.output.with_suffix(".audit.jsonl"))
-    load_local_api_key()
-    report = {"session": args.session, "started_at_s": time.time(), "tests": {}}
+    if args.provider == "openai":
+        load_local_api_key()
+    report = {"session": args.session, "intent_provider": args.provider,
+              "started_at_s": time.time(), "tests": {}}
     cases = {
         "boundary": lambda: boundary(backend),
         "stop": lambda: live_stop(backend),
         "fault": lambda: fault(backend),
         "dialogue": lambda: dialogue(backend, audit),
         "voice": lambda: {"audio": (speech := upload_and_transcribe(backend, args.audio)),
-                          "task": task(backend, audit, speech["text"])},
+                          "task": task(backend, audit, speech["text"], args.provider)},
         "sequence": lambda: task(backend, audit,
-            "Inspect the red cube. Then pick the red cube up, place it on the yellow target, and inspect it again. Use separate pick and place skills."),
+            "Inspect the red cube. Then pick the red cube up, place it on the yellow target, and inspect it again. Use separate pick and place skills.", args.provider),
     }
     try:
         for name, run in cases.items():

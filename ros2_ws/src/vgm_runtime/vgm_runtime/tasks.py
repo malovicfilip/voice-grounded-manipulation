@@ -30,6 +30,26 @@ STEP_FIELDS = {"skill", "object_id", "target_id", "pose_name", "reason"}
 
 def task_schema() -> dict[str, Any]:
     skill = load_json_config("robot_skill.schema.json")
+    combinations = {
+        "move_named_pose": {"pose_name"},
+        "open_gripper": set(), "close_gripper": set(),
+        "pick": {"object_id"}, "inspect": {"object_id"},
+        "place": {"object_id", "target_id"},
+        "pick_and_place": {"object_id", "target_id"},
+        "stop": {"reason"}, "refuse": {"reason"},
+    }
+    variants = []
+    for name, required in combinations.items():
+        properties = {"skill": {"type": "string", "enum": [name]}}
+        for key in sorted(STEP_FIELDS - {"skill"}):
+            if key not in required:
+                properties[key] = {"type": "null"}
+                continue
+            properties[key] = {**skill["properties"][key], "type": "string"}
+            if "enum" in properties[key]:
+                properties[key]["enum"] = [value for value in properties[key]["enum"] if value is not None]
+        variants.append({"type": "object", "additionalProperties": False,
+                         "required": sorted(STEP_FIELDS), "properties": properties})
     return {
         "type": "object", "additionalProperties": False,
         "required": ["schema_version", "request_id", "scene_revision", "steps"],
@@ -39,11 +59,7 @@ def task_schema() -> dict[str, Any]:
             "scene_revision": {"type": "string", "pattern": "^[a-f0-9]{16}$"},
             "steps": {
                 "type": "array", "minItems": 1, "maxItems": MAX_STEPS,
-                "items": {
-                    "type": "object", "additionalProperties": False,
-                    "required": sorted(STEP_FIELDS),
-                    "properties": {key: skill["properties"][key] for key in sorted(STEP_FIELDS)},
-                },
+                "items": {"anyOf": variants},
             },
         },
     }
@@ -133,6 +149,7 @@ class TaskSession:
                 model_input = f"Original request: {self._clarification}\nUser clarification: {transcript}"
             self._clarification = None
             raw = self.model.propose(model_input, scene, self.policy)
+            self.audit.record("model_task_proposal", {"proposal": raw})
             validator = SkillValidator(clock=self.clock)
             validator._reject_direct_control_fields(raw)
             if not isinstance(raw, dict) or set(raw) != {"schema_version", "request_id", "scene_revision", "steps"}:
