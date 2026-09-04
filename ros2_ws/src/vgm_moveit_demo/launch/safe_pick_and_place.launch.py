@@ -23,6 +23,7 @@ def generate_launch_description():
         DeclareLaunchArgument("skill", default_value="pick_and_place"),
         DeclareLaunchArgument("pose_name", default_value=""),
         DeclareLaunchArgument("scene_file", default_value=""),
+        DeclareLaunchArgument("fault_before_primitive", default_value=""),
     ]
     isaac_moveit_share = get_package_share_directory("isaac_moveit")
     moveit_config = (
@@ -39,7 +40,7 @@ def generate_launch_description():
     )
     parameters = {
         name: ParameterValue(LaunchConfiguration(name), value_type=str)
-        for name in ("request_id", "object_id", "target_id", "skill", "pose_name")
+        for name in ("request_id", "object_id", "target_id", "skill", "pose_name", "fault_before_primitive")
     }
     parameters.update(
         {

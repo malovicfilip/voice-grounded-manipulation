@@ -116,6 +116,7 @@ class TaskSession:
         self.state = "idle"
         self._used: set[str] = set()
         self._stop = threading.Event()
+        self._clarification: str | None = None
 
     def prepare(self, transcript: str) -> dict:
         if self.state not in {"idle", "awaiting_confirmation", "completed", "refused"}:
@@ -127,7 +128,11 @@ class TaskSession:
             return self.stop()
         try:
             scene = self.backend.capture()
-            raw = self.model.propose(transcript, scene, self.policy)
+            model_input = transcript
+            if self._clarification:
+                model_input = f"Original request: {self._clarification}\nUser clarification: {transcript}"
+            self._clarification = None
+            raw = self.model.propose(model_input, scene, self.policy)
             validator = SkillValidator(clock=self.clock)
             validator._reject_direct_control_fields(raw)
             if not isinstance(raw, dict) or set(raw) != {"schema_version", "request_id", "scene_revision", "steps"}:
@@ -143,22 +148,29 @@ class TaskSession:
             if not isinstance(steps, list) or not 1 <= len(steps) <= MAX_STEPS:
                 raise ValueError("task requires one to eight steps")
             held = scene.held_object_id
+            predicted_objects = dict(scene.objects)
             for index, step in enumerate(steps):
                 if not isinstance(step, dict) or set(step) != STEP_FIELDS:
                     raise ValueError("step fields are invalid")
-                virtual = replace(scene, held_object_id=held)
+                virtual = replace(scene, objects=predicted_objects, held_object_id=held)
                 validator.validate(proposal_for(step, task_id, index, virtual), virtual)
                 if step["skill"] in {"stop", "refuse"}:
                     if len(steps) != 1:
                         raise ValueError("stop/refuse must be the only step")
                     if step["skill"] == "stop":
                         return self.stop()
+                    self._clarification = model_input[:2000]
                     return self._refuse("clarification_required", step["reason"])
                 check_preconditions(step, held, virtual, self.policy)
                 if step["skill"] == "pick":
                     held = step["object_id"]
-                elif step["skill"] == "place":
+                elif step["skill"] in {"place", "pick_and_place"}:
                     held = None
+                    target = self.policy["targets"][step["target_id"]]["position_m"]
+                    predicted_objects[step["object_id"]] = replace(
+                        predicted_objects[step["object_id"]],
+                        position_m=(target[0], target[1], target[2] + 0.025),
+                    )
             if held:
                 raise ValueError("the task must finish by placing its held object")
             canonical = json.dumps(steps, sort_keys=True)
@@ -226,10 +238,11 @@ class TaskSession:
     def stop(self) -> dict:
         self._stop.set()
         self.pending = None
+        self._clarification = None
         self.state = "stopped"
         result = self.backend.stop()
         self.audit.record("operator_stop", result)
-        return {"status": "stopped", "backend": result}
+        return {"status": result.get("status", "stop_requested"), "backend": result}
 
     def recover(self) -> dict:
         if self.state not in {"stopped", "faulted"}:

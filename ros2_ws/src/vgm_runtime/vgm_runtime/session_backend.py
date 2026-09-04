@@ -132,7 +132,7 @@ class SimulatorSession:
         write_json(self.directory / "recovery_evidence.json", result)
         return result
 
-    def execute(self, proposal: dict, baseline: dict):
+    def execute(self, proposal: dict, baseline: dict, *, inject_fault=False):
         with (self.directory / "execution.lock").open("a") as lock:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
             if (self.directory / "stopped").exists():
@@ -180,6 +180,8 @@ class SimulatorSession:
                        f"object_id:={proposal['object_id'] or ''}", f"target_id:={proposal['target_id'] or ''}",
                        f"pose_name:={proposal['pose_name'] or ''}", f"scene_file:={scene_path}",
                        f"object_x:={xyz[0]}", f"object_y:={xyz[1]}", f"object_z:={xyz[2]}"]
+            if inject_fault:
+                command.append("fault_before_primitive:=pick_approach")
             active = self.directory / "execution.active"
             active.touch()
             process = None
@@ -241,12 +243,22 @@ def main():
             result = session.capture().to_mapping()
         elif operation == "execute":
             result = session.execute(request["proposal"], request["baseline"])
+        elif operation == "fault_test":
+            result = session.execute(request["proposal"], request["baseline"], inject_fault=True)
         elif operation == "stop":
             result = session.stop()
         elif operation == "recover":
             result = session.recover()
         elif operation == "robot_state":
             result = robot_state()
+        elif operation == "execution_progress":
+            used = session.state()["used_requests"]
+            lines = []
+            if used:
+                path = directory / used[-1] / "execution.log"
+                if path.is_file():
+                    lines = [line for line in path.read_text(encoding="utf-8").splitlines() if "VGM_" in line]
+            result = {"active": (directory / "execution.active").exists(), "events": lines}
         elif operation == "shutdown":
             session.stop()
             (directory / "shutdown.request").touch()

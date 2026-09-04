@@ -192,6 +192,13 @@ private:
 
   bool before_deadline(const std::string& primitive)
   {
+    // Operator-only acceptance fixture. It can only inhibit motion.
+    if (node_->has_parameter("fault_before_primitive") && primitive == "pick_approach" &&
+        node_->get_parameter("fault_before_primitive").as_string() == "pick_approach") {
+      RCLCPP_ERROR(node_->get_logger(), "VGM_FAULT_INJECTED before=pick_approach");
+      cancel("injected_backend_fault");
+      return false;
+    }
     if (!stopped_ && rclcpp::ok() && std::chrono::steady_clock::now() <= deadline_) {
       return true;
     }

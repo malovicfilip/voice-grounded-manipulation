@@ -24,8 +24,10 @@ class Model:
     def __init__(self, steps):
         self.steps = steps
         self.calls = 0
+        self.transcripts = []
     def propose(self, transcript, scene, policy):
         self.calls += 1
+        self.transcripts.append(transcript)
         return dict(schema_version=1, request_id=f"task_{self.calls}", scene_revision=scene.revision,
                     steps=copy.deepcopy(self.steps))
 
@@ -94,6 +96,7 @@ class TaskTests(unittest.TestCase):
         self.assertFalse(self.backend.executed)
         session.model.steps = [step("pick_and_place", "red_cube", "blue_target")]
         self.assertEqual(self.run_task(session)["status"], "completed")
+        self.assertIn("Original request: move it", session.model.transcripts[-1])
     def test_unpaired_pick_and_place_without_holding_are_refused(self):
         for steps in ([step("pick", "red_cube")], [step("place", "red_cube", "blue_target")]):
             session = self.session(steps)
@@ -139,6 +142,11 @@ class TaskTests(unittest.TestCase):
         self.backend.positions["green_cube"] = (0, .3, .775)
         session = self.session([step("pick_and_place", "red_cube", "blue_target")])
         self.assertEqual(session.prepare("move red")["code"], "target_occupied")
+    def test_two_steps_cannot_reserve_the_same_occupied_target(self):
+        session = self.session([step("pick_and_place", "red_cube", "blue_target"),
+                                step("pick_and_place", "green_cube", "blue_target")])
+        self.assertEqual(session.prepare("stack cubes")["code"], "target_occupied")
+        self.assertFalse(self.backend.executed)
     def test_nonfinite_sensor_confidence_and_times_fail_closed(self):
         scene = self.backend.capture()
         proposal = dict(schema_version=1, request_id="bad_sensor", scene_revision=scene.revision,
