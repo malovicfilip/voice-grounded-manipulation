@@ -31,12 +31,19 @@ def main():
     source.add_argument("--transcript")
     source.add_argument("--audio", type=Path)
     parser.add_argument("--confirm", action="store_true", help="explicitly confirm this supplied command for unattended execution")
-    parser.add_argument("--operation", choices=("stop", "recover", "capture", "robot_state", "shutdown"))
+    parser.add_argument("--operation", choices=("stop", "recover", "recover_place", "capture", "robot_state", "shutdown"))
+    parser.add_argument("--target", choices=("blue_target", "yellow_target"))
     parser.add_argument("--audit", type=Path, default=Path("isaac_sim/_output/operator-audit.jsonl"))
     args = parser.parse_args()
     backend = SSHBackend(args.session, host=args.host)
     if args.operation:
-        print(json.dumps(backend.request(args.operation), indent=2))
+        if args.operation == "recover_place":
+            if not args.confirm or not args.target:
+                parser.error("placement recovery requires --target and explicit --confirm")
+            result = backend.request("recover_place", target_id=args.target)
+        else:
+            result = backend.request(args.operation)
+        print(json.dumps(result, indent=2))
         return
     load_local_api_key()
     session = TaskSession(OpenAITaskModel(), backend, AuditLogger(args.audit))
@@ -93,6 +100,14 @@ def main():
                 result = {"status": "cancelled_before_motion"}
             elif text.lower() == "recover":
                 result = session.recover()
+            elif text.lower().startswith("recover place "):
+                target = text.split()[-1]
+                if input(f"Place the held object on {target}? [yes/no] ").strip().lower() != "yes":
+                    continue
+                result = backend.request("recover_place", target_id=target)
+                session.pending = None
+                session.state = "idle"
+                session.audit.record("confirmed_placement_recovery", result)
             elif text.lower() == "stop":
                 result = session.stop()
             else:

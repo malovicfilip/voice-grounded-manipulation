@@ -101,6 +101,11 @@ class SimulatorSession:
         return {"expected_positions": {}, "used_requests": []}
 
     def capture(self, expected=None):
+        # ROS discovery/settling can take seconds. Sample it before rendering so
+        # the returned camera timestamp is still fresh when execution checks it.
+        state = robot_state()
+        if not state["stationary"]:
+            raise RuntimeError("task capture requires a stationary robot")
         prefix = "capture-" + uuid.uuid4().hex[:16]
         hints = self.state()["expected_positions"] if expected is None else expected
         write_json(self.directory / (prefix + ".json"), {"expected_positions": hints})
@@ -110,7 +115,6 @@ class SimulatorSession:
                 raise RuntimeError("RGB-D capture timed out")
             time.sleep(0.1)
         scene = load_scene(self.directory / (prefix + "_grounded_scene.json"))
-        state = robot_state()
         return GroundedScene(scene.revision, scene.captured_at_s, scene.objects, state["held_object_id"])
 
     def stop(self):
@@ -133,10 +137,12 @@ class SimulatorSession:
         write_json(self.directory / "recovery_evidence.json", result)
         return result
 
-    def execute(self, proposal: dict, baseline: dict, *, inject_fault=False):
+    def execute(self, proposal: dict, baseline: dict, *, inject_fault=False, recovery=False):
         with (self.directory / "execution.lock").open("a") as lock:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            if (self.directory / "stopped").exists():
+            if recovery and (not (self.directory / "stopped").exists() or proposal.get("skill") != "place"):
+                raise RuntimeError("recovery motion must be explicit placement from a stopped session")
+            if (self.directory / "stopped").exists() and not recovery:
                 raise RuntimeError("session is stopped; explicit recovery is required")
             scene = self.capture()
             validator = SkillValidator()
@@ -178,7 +184,7 @@ class SimulatorSession:
                 collision_objects[observation.object_id] = observation.to_mapping()
             write_json(scene_path, {"objects": list(collision_objects.values())})
             write_json(work / "proposal.json", proposal)
-            xyz = selected.position_m if selected else (0.0, 0.0, 0.775)
+            xyz = selected.position_m if selected and proposal["skill"] != "place" else (0.0, 0.0, 0.775)
             command = ["ros2", "launch", "vgm_moveit_demo", "safe_pick_and_place.launch.py",
                        f"request_id:={request_id}", f"skill:={proposal['skill']}",
                        f"scene_file:={scene_path}",
@@ -188,6 +194,8 @@ class SimulatorSession:
             if inject_fault:
                 command.append("fault_before_primitive:=pick_approach")
             active = self.directory / "execution.active"
+            if recovery:
+                (self.directory / "stopped").unlink()
             active.touch()
             process = None
             try:
@@ -231,6 +239,19 @@ class SimulatorSession:
             finally:
                 active.unlink(missing_ok=True)
 
+    def recover_place(self, target_id):
+        if target_id not in self.policy["targets"]:
+            raise ValueError("recovery target is not allowlisted")
+        scene = self.capture()
+        if scene.held_object_id is None:
+            raise RuntimeError("placement recovery requires a verified attached object")
+        proposal = {"schema_version": 1, "request_id": "recovery_" + uuid.uuid4().hex[:16],
+                    "skill": "place", "object_id": scene.held_object_id, "target_id": target_id,
+                    "pose_name": None, "reason": None, "scene_revision": scene.revision}
+        result = self.execute(proposal, {"scene": scene.to_mapping()}, recovery=True)
+        write_json(self.directory / "placement_recovery_evidence.json", result)
+        return result
+
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -254,6 +275,8 @@ def main():
             result = session.stop()
         elif operation == "recover":
             result = session.recover()
+        elif operation == "recover_place":
+            result = session.recover_place(request["target_id"])
         elif operation == "robot_state":
             result = robot_state()
         elif operation == "execution_progress":

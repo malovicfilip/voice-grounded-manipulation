@@ -29,7 +29,13 @@ def rebind_after_capture(
     objects, changed holding state, stale observations, or movement beyond the
     existing one-centimeter limit still reject the entire request before motion.
     """
-    validator.validate(proposal, original)
+    baseline_age = validator.clock() - original.captured_at_s
+    if not math.isfinite(baseline_age) or not 0 <= baseline_age <= 120.0:
+        raise SkillValidationError("stale_baseline", "comparison observation is expired")
+    # The original capture is historical comparison evidence. Validate it at
+    # its capture time; only the new observation may authorize motion now.
+    SkillValidator(policy=validator.policy, schema=validator.schema,
+                   clock=lambda: original.captured_at_s).validate(proposal, original)
     if proposal.get("scene_revision") != original.revision:
         raise SkillValidationError("stale_revision", "proposal does not match its original observation")
     if original.held_object_id != latest.held_object_id or set(original.objects) != set(latest.objects):

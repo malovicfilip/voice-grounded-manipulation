@@ -218,6 +218,16 @@ class TaskTests(unittest.TestCase):
             rebind_after_capture(raw, original, replace(latest, objects=objects), SkillValidator())
         with self.assertRaises(SkillValidationError):
             rebind_after_capture(raw, original, replace(latest, held_object_id="red_cube"), SkillValidator())
+    def test_historical_comparison_does_not_replace_required_fresh_camera_evidence(self):
+        latest = self.backend.capture()
+        historical = replace(latest, captured_at_s=latest.captured_at_s-12,
+                             objects={key: replace(value, observed_at_s=value.observed_at_s-12)
+                                      for key, value in latest.objects.items()})
+        raw = dict(schema_version=1, request_id="freshness_regression", scene_revision=historical.revision,
+                   **step("inspect", "red_cube"))
+        rebind_after_capture(raw, historical, latest, SkillValidator())
+        with self.assertRaises(SkillValidationError):
+            rebind_after_capture(raw, historical, historical, SkillValidator())
 
 
 if __name__ == "__main__":
