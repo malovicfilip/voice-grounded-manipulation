@@ -69,6 +69,8 @@ class FasterWhisperTranscriber:
         text = " ".join(segment.text.strip() for segment in captured).strip()
         if not text:
             raise WhisperTranscriptionError("Whisper returned an empty transcript")
+        if not all(math.isfinite(float(segment.avg_logprob)) for segment in captured):
+            raise WhisperTranscriptionError("Whisper returned invalid confidence values")
         probabilities = [
             math.exp(min(0.0, float(segment.avg_logprob))) for segment in captured
         ]

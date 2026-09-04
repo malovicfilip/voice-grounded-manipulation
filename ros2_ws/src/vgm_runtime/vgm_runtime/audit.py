@@ -14,10 +14,14 @@ class AuditLogger:
 
     def record(self, event: str, values: Mapping[str, Any]) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        safe_values = dict(values)
-        for key in tuple(safe_values):
-            if "key" in key.lower() or "token" in key.lower() or "audio" in key.lower():
-                safe_values.pop(key)
+        def sanitize(value):
+            if isinstance(value, Mapping):
+                return {str(key): sanitize(child) for key, child in value.items()
+                        if not any(token in str(key).lower() for token in ("key", "token", "audio", "authorization"))}
+            if isinstance(value, (list, tuple)):
+                return [sanitize(child) for child in value]
+            return value
+        safe_values = sanitize(values)
         line = json.dumps({"event": event, **safe_values}, sort_keys=True)
         descriptor = os.open(
             self.path,

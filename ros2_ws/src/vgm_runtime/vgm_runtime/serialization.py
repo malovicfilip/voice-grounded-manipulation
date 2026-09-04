@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import math
+import re
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -10,8 +12,19 @@ from .types import GroundedScene, ObjectObservation, TaskPlan
 
 
 def scene_from_mapping(value: Mapping[str, Any]) -> GroundedScene:
-    if set(value) != {"revision", "captured_at_s", "objects"}:
+    required = {"revision", "captured_at_s", "objects"}
+    if not isinstance(value, Mapping) or not required <= set(value) or set(value) - required - {"held_object_id"}:
         raise ValueError("grounded scene fields are invalid")
+    if not isinstance(value["revision"], str) or not re.fullmatch("[a-f0-9]{16}", value["revision"]):
+        raise ValueError("invalid scene revision")
+    held = value.get("held_object_id")
+    if held is not None and (not isinstance(held, str) or not re.fullmatch("[a-z][a-z0-9_]{0,63}", held)):
+        raise ValueError("invalid held object identifier")
+
+    def number(raw):
+        if type(raw) not in {int, float} or not math.isfinite(raw):
+            raise ValueError("scene numbers must be finite numeric values")
+        return float(raw)
     observations: dict[str, ObjectObservation] = {}
     if not isinstance(value["objects"], list):
         raise ValueError("grounded scene objects must be an array")
@@ -29,11 +42,20 @@ def scene_from_mapping(value: Mapping[str, Any]) -> GroundedScene:
         position = raw["position_m"]
         if not isinstance(position, list) or len(position) != 3:
             raise ValueError("object position must contain three values")
+        if not isinstance(raw["object_id"], str) or not re.fullmatch("[a-z][a-z0-9_]{0,63}", raw["object_id"]):
+            raise ValueError("invalid object identifier")
+        if raw["frame_id"] != "world":
+            raise ValueError("object observation must be in the world frame")
+        if type(raw["pixel_count"]) is not int or raw["pixel_count"] < 0:
+            raise ValueError("invalid pixel support")
+        confidence = number(raw["confidence"])
+        if not 0 <= confidence <= 1:
+            raise ValueError("confidence must be in [0, 1]")
         observation = ObjectObservation(
             object_id=raw["object_id"],
-            position_m=tuple(float(component) for component in position),
-            confidence=float(raw["confidence"]),
-            observed_at_s=float(raw["observed_at_s"]),
+            position_m=tuple(number(component) for component in position),
+            confidence=confidence,
+            observed_at_s=number(raw["observed_at_s"]),
             frame_id=raw["frame_id"],
             pixel_count=int(raw["pixel_count"]),
         )
@@ -42,7 +64,7 @@ def scene_from_mapping(value: Mapping[str, Any]) -> GroundedScene:
         observations[observation.object_id] = observation
     return GroundedScene(
         revision=value["revision"],
-        captured_at_s=float(value["captured_at_s"]),
+        captured_at_s=number(value["captured_at_s"]),
         objects=observations,
         held_object_id=value.get("held_object_id"),
     )

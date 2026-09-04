@@ -12,6 +12,7 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "ros2_ws/src/vgm_runtime"))
 from vgm_runtime.audit import AuditLogger
 from vgm_runtime.tasks import OpenAITaskModel, TaskSession, task_schema
+from vgm_runtime.serialization import scene_from_mapping
 from vgm_runtime.types import GroundedScene, ObjectObservation
 from vgm_runtime.validator import SkillValidationError, SkillValidator
 
@@ -171,6 +172,25 @@ class TaskTests(unittest.TestCase):
         self.assertNotIn("position", captured[0]["input"])
         self.assertFalse(captured[0]["store"])
         self.assertEqual(captured[0]["text"]["format"]["schema"], task_schema())
+    def test_scene_roundtrip_preserves_controller_held_state(self):
+        self.backend.held = "red_cube"
+        scene = self.backend.capture()
+        restored = scene_from_mapping(scene.to_mapping())
+        self.assertEqual(restored, scene)
+        legacy = scene.to_mapping()
+        del legacy["held_object_id"]
+        self.assertIsNone(scene_from_mapping(legacy).held_object_id)
+    def test_serialized_sensor_numbers_frames_and_extra_fields_are_rejected(self):
+        for change in ({"confidence": float("nan")}, {"confidence": True},
+                       {"frame_id": "camera"}, {"position_m": ["0", 0, 0]}):
+            raw = self.backend.capture().to_mapping()
+            raw["objects"][0].update(change)
+            with self.assertRaises(ValueError):
+                scene_from_mapping(raw)
+    def test_nested_audit_secrets_are_redacted(self):
+        path = Path(self.directory.name) / "nested.jsonl"
+        AuditLogger(path).record("nested", {"response": [{"api_key": "secret", "text": "ok"}]})
+        self.assertEqual(json.loads(path.read_text())["response"], [{"text": "ok"}])
 
 
 if __name__ == "__main__":
