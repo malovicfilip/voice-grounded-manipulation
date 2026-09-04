@@ -51,7 +51,13 @@ def main():
     def execute_pending(token):
         # Keep Ctrl+C responsive while the SSH execution is pending.
         outcome = []
-        worker = threading.Thread(target=lambda: outcome.append(session.confirm(token)))
+        def run():
+            try:
+                outcome.append(session.confirm(token))
+            except Exception as error:
+                outcome.append({"status": "faulted", "message": str(error),
+                                "cancellation": session.stop()})
+        worker = threading.Thread(target=run)
         worker.start()
         try:
             while worker.is_alive():
@@ -61,7 +67,7 @@ def main():
             worker.join(timeout=15)
             if worker.is_alive():
                 raise RuntimeError("stop requested; remote completion is still pending")
-        return outcome[0] if outcome else {"status": "stopped"}
+        return outcome[0] if outcome else {"status": "stop_unconfirmed"}
 
     if args.transcript is not None or args.audio is not None:
         transcript = args.transcript
@@ -81,7 +87,7 @@ def main():
         print(json.dumps(result, indent=2))
         raise SystemExit(0 if result["status"] == "completed" else 2)
 
-    print("Enter a command, 'audio PATH', 'yes', 'no', 'stop', 'recover', or 'quit'. Ctrl+C requests stop.")
+    print("Enter a command, 'audio PATH', 'yes', 'no', 'stop', 'recover', 'recover place TARGET', or 'quit'. Ctrl+C requests stop.")
     while True:
         try:
             text = input("vgm> ").strip()

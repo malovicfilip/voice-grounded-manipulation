@@ -8,6 +8,7 @@ import sys
 import tempfile
 import time
 import unittest
+from unittest.mock import patch
 import jsonschema
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "ros2_ws/src/vgm_runtime"))
@@ -123,6 +124,28 @@ class TaskTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             session.confirm(pending["confirmation"])
         self.assertFalse(self.backend.executed)
+
+    def test_failed_cancellation_is_reported_without_claiming_robot_stopped(self):
+        session = self.session([step("inspect", "red_cube")])
+        self.backend.fail_at = 1
+        with patch.object(self.backend, "stop", side_effect=RuntimeError("SSH disconnected")):
+            result = self.run_task(session)
+        self.assertEqual(result["status"], "faulted")
+        self.assertFalse(result["cancellation_confirmed"])
+        self.assertEqual(result["cancellation_error"], "SSH disconnected")
+        self.assertEqual(session.state, "faulted")
+
+    def test_operator_stop_disconnect_invalidates_pending_and_requires_recovery(self):
+        session = self.session([step("inspect", "red_cube")])
+        pending = session.prepare("inspect red")
+        with patch.object(self.backend, "stop", side_effect=RuntimeError("SSH disconnected")):
+            result = session.stop()
+        self.assertEqual(result["status"], "stop_unconfirmed")
+        self.assertEqual(session.state, "faulted")
+        with self.assertRaises(ValueError):
+            session.confirm(pending["confirmation"])
+        with self.assertRaises(RuntimeError):
+            session.prepare("try another command")
     def test_drift_after_confirmation_request_refuses_execution(self):
         session = self.session([step("pick_and_place", "red_cube", "blue_target")])
         pending = session.prepare("move red")

@@ -244,11 +244,14 @@ class TaskSession:
             result = {"status": self.state, "completed_steps": completed}
         except Exception as error:
             self.state = "stopped" if self._stop.is_set() else "faulted"
+            result = {"status": self.state, "code": getattr(error, "code", "execution_failure"),
+                      "message": str(error), "completed_steps": completed}
             try:
-                self.backend.stop()
-            finally:
-                result = {"status": self.state, "code": getattr(error, "code", "execution_failure"),
-                          "message": str(error), "completed_steps": completed}
+                result["cancellation"] = self.backend.stop()
+            except Exception as stop_error:
+                self.state = "faulted"
+                result.update(status="faulted", cancellation_confirmed=False,
+                              cancellation_error=str(stop_error))
         self.audit.record("task_result", result)
         return result
 
@@ -257,7 +260,11 @@ class TaskSession:
         self.pending = None
         self._clarification = None
         self.state = "stopped"
-        result = self.backend.stop()
+        try:
+            result = self.backend.stop()
+        except Exception as error:
+            self.state = "faulted"
+            result = {"status": "stop_unconfirmed", "message": str(error)}
         self.audit.record("operator_stop", result)
         return {"status": result.get("status", "stop_requested"), "backend": result}
 
