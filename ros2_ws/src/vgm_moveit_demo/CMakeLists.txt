@@ -6,6 +6,7 @@ find_package(moveit_ros_planning_interface REQUIRED)
 find_package(moveit_msgs REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(shape_msgs REQUIRED)
+find_package(std_srvs REQUIRED)
 
 add_executable(safe_named_pose src/safe_named_pose.cpp)
 target_compile_features(safe_named_pose PUBLIC cxx_std_17)
@@ -23,6 +24,7 @@ ament_target_dependencies(
   moveit_ros_planning_interface
   rclcpp
   shape_msgs
+  std_srvs
 )
 
 install(TARGETS safe_named_pose safe_pick_and_place DESTINATION lib/${PROJECT_NAME})

@@ -47,6 +47,7 @@ setup(
             "validate_outcome = vgm_runtime.outcome_cli:main",
             "skill_gateway = vgm_runtime.ros_gateway:main",
             "voice_cli = vgm_runtime.voice_cli:main",
+            "task_console = vgm_runtime.task_cli:main",
         ]
     },
 )

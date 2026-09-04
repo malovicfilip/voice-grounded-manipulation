@@ -9,9 +9,14 @@ fi
 TRANSCRIPT=""
 AUDIO_PATH=""
 PROVIDER="openai"
+SESSION=false
 RUN_ID="voice-demo-$(date -u +%Y%m%dT%H%M%SZ)"
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --session)
+      SESSION=true
+      shift
+      ;;
     --transcript)
       TRANSCRIPT="${2:-}"
       shift 2
@@ -35,8 +40,8 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ -n "${TRANSCRIPT}" && -n "${AUDIO_PATH}" ]] || \
-   [[ -z "${TRANSCRIPT}" && -z "${AUDIO_PATH}" ]]; then
+if [[ "${SESSION}" != true ]] && { [[ -n "${TRANSCRIPT}" && -n "${AUDIO_PATH}" ]] || \
+   [[ -z "${TRANSCRIPT}" && -z "${AUDIO_PATH}" ]]; }; then
   echo 'Provide exactly one of --transcript or --audio.' >&2
   exit 2
 fi
@@ -81,7 +86,7 @@ if [[ -n "${AUDIO_PATH}" && ! -s "${AUDIO_PATH}" ]]; then
   echo "Audio file is missing or empty: ${AUDIO_PATH}" >&2
   exit 2
 fi
-if [[ "${PROVIDER}" == "openai" && ! -s "${REPOSITORY_ROOT}/.env.local" && \
+if [[ "${SESSION}" != true && "${PROVIDER}" == "openai" && ! -s "${REPOSITORY_ROOT}/.env.local" && \
       -z "${OPENAI_API_KEY:-}" ]]; then
   echo 'OPENAI_API_KEY is unavailable; use an ignored .env.local or the environment.' >&2
   exit 2
@@ -171,7 +176,9 @@ if [[ ! -s "${HOST_OUTPUT}/initial_grounded_scene.json" ]]; then
   exit 1
 fi
 
-if [[ -n "${TRANSCRIPT}" ]]; then
+if [[ "${SESSION}" == true ]]; then
+  : # Workstation client supplies confirmed high-level tasks over SSH.
+elif [[ -n "${TRANSCRIPT}" ]]; then
   run_ros ros2 run vgm_runtime intent_cli \
     --transcript "${TRANSCRIPT}" \
     --scene-json "${HOST_OUTPUT}/initial_grounded_scene.json" \
@@ -208,6 +215,19 @@ done
 if [[ "${controllers_ready}" != "true" ]]; then
   echo 'Timed out waiting for active MoveIt controllers.' >&2
   exit 1
+fi
+
+if [[ "${SESSION}" == true ]]; then
+  touch "${HOST_OUTPUT}/session.ready"
+  echo "Reusable simulator session ready: ${HOST_OUTPUT}"
+  # Bound the session independently of the external Brev cost guard.
+  session_deadline=$((SECONDS + 7200))
+  while [[ ! -f "${HOST_OUTPUT}/shutdown.request" && ${SECONDS} -lt ${session_deadline} ]]; do
+    kill -0 "${ISAAC_PID}" 2>/dev/null || exit 1
+    kill -0 "${MOVEIT_PID}" 2>/dev/null || exit 1
+    sleep 1
+  done
+  exit 0
 fi
 
 touch "${HOST_OUTPUT}/capture_verification.request"

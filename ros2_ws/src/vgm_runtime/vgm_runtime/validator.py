@@ -112,7 +112,7 @@ class SkillValidator:
         if proposal.request_id in self._accepted_request_ids and proposal.skill != "stop":
             raise SkillValidationError("replayed_request", "request_id was already accepted")
 
-        if proposal.skill in {"pick", "place", "pick_and_place"}:
+        if proposal.skill in {"pick", "place", "pick_and_place", "inspect"}:
             self._validate_grounding(proposal, scene)
 
         validated_at = float(self.clock())
@@ -141,7 +141,7 @@ class SkillValidator:
         proposal = validated.proposal
         self._validate_scalar_types(proposal)
         self._validate_field_combination(proposal)
-        if proposal.skill in {"pick", "place", "pick_and_place"}:
+        if proposal.skill in {"pick", "place", "pick_and_place", "inspect"}:
             self._validate_grounding(proposal, latest_scene)
         return ValidatedSkill(
             proposal=proposal,
@@ -210,7 +210,7 @@ class SkillValidator:
             valid = empty["object_id"] and empty["target_id"] and not empty["pose_name"] and empty["reason"]
         elif skill in {"open_gripper", "close_gripper"}:
             valid = all(empty.values())
-        elif skill == "pick":
+        elif skill in {"pick", "inspect"}:
             valid = not empty["object_id"] and empty["target_id"] and empty["pose_name"] and empty["reason"]
         elif skill in {"place", "pick_and_place"}:
             valid = not empty["object_id"] and not empty["target_id"] and empty["pose_name"] and empty["reason"]
@@ -220,7 +220,7 @@ class SkillValidator:
             raise SkillValidationError(
                 "invalid_parameters", f"fields are invalid for skill {skill}"
             )
-        if skill in {"pick", "place", "pick_and_place"} and proposal.scene_revision is None:
+        if skill in {"pick", "place", "pick_and_place", "inspect"} and proposal.scene_revision is None:
             raise SkillValidationError(
                 "scene_revision_required", "grounded skills require a scene revision"
             )
@@ -236,15 +236,25 @@ class SkillValidator:
             raise SkillValidationError("stale_revision", "scene revision does not match")
 
         age = float(self.clock()) - scene.captured_at_s
-        if age < 0.0 or age > self.policy["maximum_scene_age_s"]:
+        if not math.isfinite(age) or age < 0.0 or age > self.policy["maximum_scene_age_s"]:
             raise SkillValidationError("stale_scene", "grounded scene is stale")
+
+        if proposal.skill == "place" and scene.held_object_id == proposal.object_id:
+            target = self.policy["targets"].get(proposal.target_id)
+            if target is None:
+                raise SkillValidationError("target_not_grounded", "target is not allowlisted")
+            self._validate_workspace_position(tuple(target["position_m"]), "target")
+            return
 
         observation = scene.objects.get(proposal.object_id or "")
         if observation is None:
             raise SkillValidationError("object_not_grounded", "object is not grounded")
-        if observation.confidence < self.policy["minimum_object_confidence"]:
+        if not math.isfinite(observation.confidence) or not (
+            self.policy["minimum_object_confidence"] <= observation.confidence <= 1.0
+        ):
             raise SkillValidationError("low_confidence", "object confidence is too low")
-        if scene.captured_at_s - observation.observed_at_s > self.policy["maximum_scene_age_s"]:
+        object_age = scene.captured_at_s - observation.observed_at_s
+        if not math.isfinite(object_age) or not 0.0 <= object_age <= self.policy["maximum_scene_age_s"]:
             raise SkillValidationError("stale_object", "object observation is stale")
         self._validate_workspace_position(observation.position_m, "object")
 

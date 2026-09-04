@@ -32,6 +32,7 @@ class GroundedScene:
     revision: str
     captured_at_s: float
     objects: Mapping[str, ObjectObservation] = field(default_factory=dict)
+    held_object_id: str | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "objects", MappingProxyType(dict(self.objects)))
@@ -40,6 +41,7 @@ class GroundedScene:
         return {
             "revision": self.revision,
             "captured_at_s": self.captured_at_s,
+            "held_object_id": self.held_object_id,
             "objects": [
                 self.objects[object_id].to_mapping()
                 for object_id in sorted(self.objects)

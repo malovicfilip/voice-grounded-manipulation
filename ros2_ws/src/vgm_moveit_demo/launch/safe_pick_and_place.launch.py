@@ -1,10 +1,11 @@
 """Run one independently bounded, validator-gated pick-and-place task."""
 
 import os
+import json
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
+from launch.actions import DeclareLaunchArgument, OpaqueFunction
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
@@ -19,6 +20,9 @@ def generate_launch_description():
         DeclareLaunchArgument("object_x"),
         DeclareLaunchArgument("object_y"),
         DeclareLaunchArgument("object_z"),
+        DeclareLaunchArgument("skill", default_value="pick_and_place"),
+        DeclareLaunchArgument("pose_name", default_value=""),
+        DeclareLaunchArgument("scene_file", default_value=""),
     ]
     isaac_moveit_share = get_package_share_directory("isaac_moveit")
     moveit_config = (
@@ -35,7 +39,7 @@ def generate_launch_description():
     )
     parameters = {
         name: ParameterValue(LaunchConfiguration(name), value_type=str)
-        for name in ("request_id", "object_id", "target_id")
+        for name in ("request_id", "object_id", "target_id", "skill", "pose_name")
     }
     parameters.update(
         {
@@ -43,10 +47,17 @@ def generate_launch_description():
             for name in ("object_x", "object_y", "object_z")
         }
     )
-    return LaunchDescription(
-        arguments
-        + [
-            Node(
+    def launch_executor(context):
+        observed_parameters = {}
+        scene_file = LaunchConfiguration("scene_file").perform(context)
+        if scene_file:
+            with open(scene_file, encoding="utf-8") as stream:
+                scene = json.load(stream)
+            observed_parameters = {
+                "scene_" + item["object_id"]: item["position_m"]
+                for item in scene["objects"]
+            }
+        return [Node(
                 package="vgm_moveit_demo",
                 executable="safe_pick_and_place",
                 output="screen",
@@ -55,7 +66,7 @@ def generate_launch_description():
                     moveit_config.robot_description_semantic,
                     moveit_config.robot_description_kinematics,
                     parameters,
+                    observed_parameters,
                 ],
-            )
-        ]
-    )
+            )]
+    return LaunchDescription(arguments + [OpaqueFunction(function=launch_executor)])

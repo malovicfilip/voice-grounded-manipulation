@@ -21,7 +21,7 @@ def validate_placement_outcome(
     policy: Mapping[str, Any],
 ) -> dict[str, Any]:
     skill = execution.get("validated_skill")
-    if not isinstance(skill, Mapping) or skill.get("skill") != "pick_and_place":
+    if not isinstance(skill, Mapping) or skill.get("skill") not in {"pick_and_place", "place"}:
         raise OutcomeValidationError(
             "unsupported_outcome", "outcome validation requires pick_and_place"
         )
@@ -37,13 +37,15 @@ def validate_placement_outcome(
         raise OutcomeValidationError(
             "object_not_observed", "placed object is absent from final RGB-D"
         )
-    if observation.confidence < policy["minimum_object_confidence"]:
+    if not math.isfinite(observation.confidence) or not (
+        policy["minimum_object_confidence"] <= observation.confidence <= 1.0
+    ):
         raise OutcomeValidationError(
             "low_outcome_confidence", "placed object confidence is too low"
         )
     target_position = target["position_m"]
     error_m = math.dist(observation.position_m[:2], target_position[:2])
-    if error_m > policy["maximum_placement_error_m"]:
+    if not math.isfinite(error_m) or error_m > policy["maximum_placement_error_m"]:
         raise OutcomeValidationError(
             "placement_error", "placed object is outside target tolerance"
         )

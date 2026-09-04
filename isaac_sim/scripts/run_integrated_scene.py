@@ -8,6 +8,7 @@ captures synchronized RGB-D evidence on explicit file-based requests.
 
 import argparse
 import json
+import re
 import sys
 import time
 from pathlib import Path
@@ -214,6 +215,7 @@ def main() -> int:
     initial_captured = False
     verification_captured = False
     final_settle_frames = 0
+    processed_captures = set()
     while simulation_app.is_running():
         simulation_app.update()
         frame_count += 1
@@ -223,6 +225,25 @@ def main() -> int:
         depth = _tensor_to_numpy(depth_data)
         if depth is not None:
             depth = np.asarray(depth, dtype=np.float32).squeeze()
+
+        # Reusable sessions request uniquely named captures. These messages
+        # contain perception hints only and never robot-control instructions.
+        if rgb is not None and depth is not None:
+            for request in sorted(output_directory.glob("capture-*.json")):
+                if request.name in processed_captures:
+                    continue
+                if not re.fullmatch(r"capture-[a-f0-9]{16}\.json", request.name):
+                    continue
+                value = json.loads(request.read_text(encoding="utf-8"))
+                if set(value) != {"expected_positions"}:
+                    raise ValueError("capture request fields are invalid")
+                expected = value["expected_positions"]
+                if not isinstance(expected, dict) or set(expected) - set(grounder._object_ids):
+                    raise ValueError("capture hints contain unknown objects")
+                prefix = request.stem
+                _capture_rgbd(prefix, rgb, depth, output_directory, grounder,
+                              intrinsics, camera_to_world, expected)
+                processed_captures.add(request.name)
 
         initial_request = output_directory / "capture_initial.request"
         if (

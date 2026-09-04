@@ -44,6 +44,7 @@ def scene_from_mapping(value: Mapping[str, Any]) -> GroundedScene:
         revision=value["revision"],
         captured_at_s=float(value["captured_at_s"]),
         objects=observations,
+        held_object_id=value.get("held_object_id"),
     )
 
 

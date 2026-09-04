@@ -15,6 +15,8 @@ class TaskCoordinator:
     def create_plan(
         self, skill: ValidatedSkill, scene: GroundedScene | None
     ) -> TaskPlan:
+        if not isinstance(skill, ValidatedSkill):
+            raise ValueError("coordination requires a validated skill")
         proposal = skill.proposal
         if skill.policy_version != self.policy["policy_version"]:
             raise ValueError("validated skill policy version does not match")
@@ -40,6 +42,8 @@ class TaskCoordinator:
             )
         elif proposal.skill == "stop":
             primitives = (MotionPrimitive("stop"),)
+        elif proposal.skill == "inspect":
+            primitives = (MotionPrimitive("inspect", object_id=proposal.object_id),)
         elif proposal.skill == "refuse":
             primitives = ()
         else:  # The validator should make this branch unreachable.

@@ -106,12 +106,18 @@ class OpenAIIntentModel:
         timeout_s: float = 20.0,
         transport: Callable[..., dict[str, Any]] = _default_transport,
         request_id_factory: Callable[[], str] | None = None,
+        instructions: str | None = None,
+        response_name: str = "robot_skill_proposal",
+        max_output_tokens: int = 512,
     ) -> None:
         self.model = model
         self.schema = dict(schema or load_json_config("robot_skill.schema.json"))
         self.api_key = api_key
         self.timeout_s = float(timeout_s)
         self.transport = transport
+        self.instructions = instructions
+        self.response_name = response_name
+        self.max_output_tokens = max_output_tokens
         self.request_id_factory = request_id_factory or (
             lambda: f"req_{uuid.uuid4().hex[:16]}"
         )
@@ -137,7 +143,7 @@ class OpenAIIntentModel:
         }
         payload = {
             "model": self.model,
-            "instructions": (
+            "instructions": self.instructions or (
                 "Convert the transcript into exactly one high-level robot skill. "
                 "Copy request_id and scene_revision exactly. Never invent object IDs. "
                 "Never emit joints, velocities, motors, torques, efforts, or trajectories. "
@@ -146,12 +152,12 @@ class OpenAIIntentModel:
             ),
             "input": json.dumps(context, separators=(",", ":")),
             "reasoning": {"effort": "low"},
-            "max_output_tokens": 512,
+            "max_output_tokens": self.max_output_tokens,
             "store": False,
             "text": {
                 "format": {
                     "type": "json_schema",
-                    "name": "robot_skill_proposal",
+                    "name": self.response_name,
                     "strict": True,
                     "schema": self.schema,
                 }

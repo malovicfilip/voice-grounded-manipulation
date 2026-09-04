@@ -32,6 +32,7 @@
         "pick",
         "place",
         "pick_and_place",
+        "inspect",
         "stop",
         "refuse"
       ]
