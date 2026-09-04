@@ -21,7 +21,8 @@ from pathlib import Path
 
 from .config import load_json_config
 from .outcome import validate_placement_outcome
-from .serialization import load_scene
+from .execution_gate import rebind_after_capture
+from .serialization import load_scene, scene_from_mapping
 from .tasks import check_preconditions
 from .types import GroundedScene
 from .validator import SkillValidator
@@ -139,7 +140,10 @@ class SimulatorSession:
                 raise RuntimeError("session is stopped; explicit recovery is required")
             scene = self.capture()
             validator = SkillValidator()
-            validator.validate(proposal, scene)
+            if "scene" in baseline:
+                proposal = rebind_after_capture(proposal, scene_from_mapping(baseline["scene"]), scene, validator)
+            else:
+                validator.validate(proposal, scene)
             check_preconditions(proposal, scene.held_object_id, scene, self.policy)
             state = self.state()
             request_id = proposal["request_id"]

@@ -48,7 +48,8 @@ class SSHBackend:
     def execute(self, proposal, scene):
         observed = scene.objects.get(proposal["object_id"])
         return self.request("execute", proposal=proposal,
-                            baseline={"object_position": list(observed.position_m) if observed else None})
+                            baseline={"scene": scene.to_mapping(),
+                                      "object_position": list(observed.position_m) if observed else None})
 
     def stop(self):
         return self.request("stop")

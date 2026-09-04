@@ -19,6 +19,30 @@ _VALIDATED_METADATA = {
 }
 
 
+def rebind_after_capture(
+    proposal: Mapping[str, Any], original: GroundedScene,
+    latest: GroundedScene, validator: SkillValidator,
+) -> dict[str, Any]:
+    """Refresh a revision only after independently comparing measured geometry.
+
+    Hash bins can differ for submillimeter noise at a rounding boundary. Missing
+    objects, changed holding state, stale observations, or movement beyond the
+    existing one-centimeter limit still reject the entire request before motion.
+    """
+    validator.validate(proposal, original)
+    if proposal.get("scene_revision") != original.revision:
+        raise SkillValidationError("stale_revision", "proposal does not match its original observation")
+    if original.held_object_id != latest.held_object_id or set(original.objects) != set(latest.objects):
+        raise SkillValidationError("scene_changed", "object identities or holding state changed")
+    for object_id, observation in original.objects.items():
+        drift = math.dist(observation.position_m, latest.objects[object_id].position_m)
+        if not math.isfinite(drift) or drift > validator.policy["maximum_object_drift_m"]:
+            raise SkillValidationError("object_moved", "scene geometry moved between captures")
+    refreshed = {**proposal, "scene_revision": latest.revision}
+    SkillValidator(policy=validator.policy, schema=validator.schema, clock=validator.clock).validate(refreshed, latest)
+    return refreshed
+
+
 def gate_decision(
     decision: Mapping[str, Any],
     latest_scene: GroundedScene,

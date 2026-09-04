@@ -14,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "ros2_ws/src/vgm_ru
 from vgm_runtime.audit import AuditLogger
 from vgm_runtime.tasks import OpenAITaskModel, TaskSession, task_schema
 from vgm_runtime.serialization import scene_from_mapping
+from vgm_runtime.execution_gate import rebind_after_capture
 from vgm_runtime.types import GroundedScene, ObjectObservation
 from vgm_runtime.validator import SkillValidationError, SkillValidator
 
@@ -203,6 +204,20 @@ class TaskTests(unittest.TestCase):
         path = Path(self.directory.name) / "nested.jsonl"
         AuditLogger(path).record("nested", {"response": [{"api_key": "secret", "text": "ok"}]})
         self.assertEqual(json.loads(path.read_text())["response"], [{"text": "ok"}])
+    def test_sensor_hash_boundary_can_refresh_only_with_bounded_measured_drift(self):
+        original = self.backend.capture()
+        raw = dict(schema_version=1, request_id="capture_rebind", scene_revision=original.revision,
+                   **step("inspect", "red_cube"))
+        objects = dict(original.objects)
+        objects["green_cube"] = replace(objects["green_cube"], position_m=(.101, -.18, .775))
+        latest = replace(original, revision="fedcba9876543210", objects=objects)
+        refreshed = rebind_after_capture(raw, original, latest, SkillValidator())
+        self.assertEqual(refreshed["scene_revision"], latest.revision)
+        objects["green_cube"] = replace(objects["green_cube"], position_m=(.12, -.18, .775))
+        with self.assertRaises(SkillValidationError):
+            rebind_after_capture(raw, original, replace(latest, objects=objects), SkillValidator())
+        with self.assertRaises(SkillValidationError):
+            rebind_after_capture(raw, original, replace(latest, held_object_id="red_cube"), SkillValidator())
 
 
 if __name__ == "__main__":
