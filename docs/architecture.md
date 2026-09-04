@@ -7,30 +7,42 @@ The system turns a spoken manipulation request into a safe simulated action by a
 ## Components
 
 - **User interaction** — receives a spoken request and returns confirmations, clarifications, refusals, and status.
-- **Whisper speech-to-text** — converts audio to a transcript with associated confidence or error signals.
-- **LLM intent-to-skill interface** — proposes a structured, high-level skill request from the transcript and available task context. Its output is limited to the approved skill schema.
-- **Skill validator and policy layer** — checks schema validity, allowed skill names and parameters, workspace and task policies, required object references, and safety preconditions. It rejects anything that is invalid, ambiguous, unsupported, or unsafe.
-- **RGB-D perception and scene grounding** — detects or tracks relevant objects and estimates scene state, object poses, and confidence needed to resolve valid skill parameters.
-- **Task coordinator** — expands an accepted high-level skill into deterministic robot-task actions and requests plans from MoveIt 2.
+- **Whisper speech-to-text** — uses local `faster-whisper` to convert an audio file to a transcript and refuses empty or low-confidence results.
+- **RGB-D perception and scene grounding** — synchronizes RGB and metric depth, identifies configured colored cubes, back-projects them into the world frame, and records object confidence, time, pixel support, and a stable scene revision.
+- **LLM intent-to-skill interface** — asks `gpt-5.6-terra` for one tool-free, strict-schema high-level skill using only the transcript and allowlisted scene identifiers. API storage is disabled.
+- **Skill validator and policy layer** — checks the exact schema, allowed skill/parameter combinations, replay protection, freshness, object confidence, workspace limits, and forbidden direct-control fields. It rejects anything invalid, ambiguous, unsupported, stale, or unsafe.
+- **Pre-execution gate** — obtains a fresh RGB-D scene, revalidates the minted skill and policy version, rejects more than 1 cm of commanded-object drift, and regenerates the deterministic plan.
+- **Task coordinator** — expands a validator-minted skill into an immutable sequence of bounded task primitives. The current `pick_and_place` plan contains gripper, Cartesian approach/retreat, attach, and detach operations; no model-supplied coordinates are used.
 - **MoveIt 2** — performs kinematic planning, collision checking, and trajectory generation within configured limits.
 - **ROS 2 Jazzy** — provides communication, lifecycle management, transforms, robot state, and telemetry between the system components.
 - **Isaac Sim** — hosts the simulated workspace, Franka Panda, sensors, physics, and simulation clock.
-- **Franka Panda controller interface** — executes approved MoveIt-generated trajectories in simulation and reports state.
+- **Safe execution and Panda controller interface** — accepts only allowlisted identifiers and validator-derived coordinates, adds the table/cubes to the planning scene, caps motion scaling, enforces the deadline, executes approved MoveIt-generated trajectories, and reports state.
+- **Outcome validator and audit log** — requires final RGB-D evidence of the placed cube within target tolerance and records decisions without API keys, tokens, or raw audio.
 
 ## Data flow
 
 ```text
-Spoken request
-  -> Whisper transcript
-  -> LLM structured high-level skill proposal
-  -> Skill validator and policy checks
-  -> RGB-D grounding and scene-state checks
-  -> Task coordinator
-  -> MoveIt 2 plan and collision checks
-  -> ROS 2 control messages
-  -> Franka Panda in Isaac Sim
-  -> robot state, camera data, and execution result
-  -> task coordinator and user interaction
+Isaac RGB + metric depth ──> scene grounding ──> scene revision + object IDs
+                                                     │
+Spoken request ──> Whisper transcript ───────────────┤
+                                                     v
+                  constrained LLM skill proposal (no tools or coordinates)
+                                                     │
+                                                     v
+                         strict schema + policy validation
+                                                     │
+fresh RGB-D scene ──> freshness/drift revalidation ──┤
+                                                     v
+                       deterministic task primitives
+                                                     │
+                                                     v
+                    MoveIt 2 collision-aware planning
+                                                     │
+                                                     v
+             ROS 2 controllers ──> Panda in Isaac Sim
+                                                     │
+                                                     v
+           final RGB-D outcome check + status/audit result
 ```
 
 ## Authority boundaries
@@ -41,22 +53,41 @@ Only the deterministic validation and execution path may authorize motion:
 
 1. The validator accepts an allowed skill with complete, safe parameters.
 2. Perception grounds referenced objects and confirms required confidence and scene conditions.
-3. The coordinator requests a plan from MoveIt 2.
-4. MoveIt 2 applies configured kinematic, collision, and trajectory constraints.
-5. The controller interface executes the approved trajectory and reports the result.
+3. A second capture rejects stale state or commanded-object drift immediately before execution.
+4. The coordinator expands the skill using policy-owned positions and offsets.
+5. MoveIt 2 applies configured kinematic, collision, and trajectory constraints.
+6. The controller interface executes the approved trajectory and reports the result.
+7. A final RGB-D capture confirms the expected placement outcome.
 
-Any failed validation, missing grounding, unsafe condition, planning failure, or execution fault must stop the requested action and produce a refusal or recoverable error state.
+Any failed validation, missing grounding, unsafe condition, planning failure,
+execution fault, timeout, or failed outcome check makes the run fail closed.
+Success means both motion execution and the independent observable outcome were
+accepted.
 
-## Initial high-level skill boundary
+## High-level skill boundary
 
-The first executable boundary is an allowlisted `move_named_pose` demonstration
-with only `ready`, `extended`, and `transport`. The deterministic client rejects
-any other identifier before starting simulation or requesting a plan, caps
-velocity and acceleration scaling at 20%, and delegates all trajectory creation
-and execution to MoveIt 2. The Isaac bridge consumes only the resulting ROS
-control commands and does not expose a language-model control path.
+The versioned schema allows `move_named_pose`, `open_gripper`, `close_gripper`,
+`pick`, `place`, `pick_and_place`, `stop`, and `refuse`. Each skill has one
+exact field combination. Grounded skills must copy the current scene revision
+and use observed object IDs plus configured target IDs. Named poses are limited
+to `ready`, `extended`, and `transport`.
 
-This is a narrow Phase 1 proof, not the final LLM interface. The complete
-structured skill schema, gripper operations, simulated stop/no-op, workspace
-bounds, perception grounding, confirmation policy, and preconditions must still
-be versioned and tested before voice-driven execution is enabled.
+The schema intentionally has no coordinate or control fields, sets
+`additionalProperties` to false, and is duplicated by deterministic semantic
+checks. Recursive forbidden-field detection rejects joints, velocities, motors,
+efforts, torques, and trajectories even if a malformed producer tries to nest
+them. Only the validator can mint the in-process `ValidatedSkill` type required
+by coordination.
+
+The current integrated executor supports the complete `pick_and_place` path.
+Other schema skills establish and test the task-level API boundary but are not
+all exposed as standalone live simulator demos yet.
+
+## Deployment boundary
+
+The GPU deployment is headless and uses NVIDIA Isaac Sim 6.0.1 in its pinned
+container. ROS 2 Jazzy and MoveIt 2 stay in the repository's locked Pixi
+environment. Docker host networking is used only for ROS discovery; no Docker
+ports or cloud firewall rules are published. Generated images, depth arrays,
+logs, credentials, and run manifests remain ignored, while code, configuration,
+tests, and documentation are kept in Git.

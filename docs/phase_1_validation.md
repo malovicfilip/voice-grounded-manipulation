@@ -57,26 +57,53 @@ For each test, record the scene/configuration version, command or input fixture,
 
 ## Current verified evidence
 
-The repository's 22 simulator-independent tests pass. Five of those tests cover
-the initial MoveIt boundary: an unknown named pose exits with status 2 before
-setup; the client has no ROS publisher; motion scaling is capped at 20%; the
-Isaac bridge contains no direct joint setters; and the environment pins Jazzy,
-Fast DDS, and Isaac Sim 6.0.1 without a second Isaac Sim installation.
+The repository's 59 simulator-independent tests pass. They cover the scene and
+RGB-D contracts, exact skill shapes, malformed/extra fields, recursive
+direct-control-field rejection, ambiguity, missing/stale/low-confidence
+grounding, workspace and target policy, replay protection, scene revalidation,
+commanded-object drift, deterministic task expansion, LLM response handling,
+audit redaction, stop/fault/timeout supervision, MoveIt-only execution, and
+final outcome validation.
 
-The `vgm_moveit_demo` package builds in the locked Pixi/RoboStack environment.
-A controller mock verified successful planning and execution for `extended`.
-With the real Isaac Sim Franka and ROS bridge, `ready` and `extended` both
-planned and executed successfully. The automated `moveit-visual-v3` run exited
-with status 0 after producing both 640 x 480 images, both joint-state snapshots,
-component logs, and a success manifest. Its final measured arm state for
-`extended` was approximately:
+The `vgm_moveit_demo` and `vgm_runtime` packages build in the locked
+Pixi/RoboStack environment. The following live evidence has been collected on
+the Brev NVIDIA L4 instance using Isaac Sim 6.0.1 and ROS 2 Jazzy:
 
-```text
-[0.0001, -0.0005, 0.0001, -0.0698, 0.0001, 1.5709, 0.7850]
-```
+- NVIDIA's Isaac Sim compatibility checker passed with the L4, Vulkan, and the
+  installed 595.71.05 driver.
+- The Phase 1 scene produced 640 x 480 RGB and metric-depth images from the live
+  USD stage.
+- `ready` and `extended` named poses planned and executed through MoveIt 2. In
+  the `moveit-visual-v3` run, joint 4 stopped at its configured upper limit
+  (`-0.0698` rad) instead of the named pose's nominal zero, showing that the
+  MoveIt/controller limit remained authoritative.
+- The integrated `pick_and_place` run `integrated-rules-v9` completed all 11
+  deterministic primitives with `plan=success execution=success`. The red cube
+  moved from approximately `[-0.0903, -0.1985, 0.7750]` m to
+  `[0.0205, 0.2936, 0.7750]` m. The launcher's final live RGB-D outcome gate
+  accepted confidence 0.8082 and a 0.0215 m error from `blue_target`, inside the
+  required 0.06 m tolerance. Its manifest records `result: success`, Isaac Sim
+  6.0.1, ROS 2 Jazzy, and the deterministic `rules` intent provider.
+- A generated spoken WAV was transcribed by the pinned `faster-whisper`
+  `small.en` model as “Pick the red cube and place it on the blue target.” with
+  confidence 0.8227 (minimum accepted confidence: 0.55).
+- A live `gpt-5.6-terra` Responses API smoke test returned an accepted
+  `pick_and_place(red_cube, blue_target)` proposal using strict structured
+  output, no tools, no coordinates, and `store: false`. The validator expanded
+  it to 11 deterministic primitives.
 
-Joint 4 stopped at its configured upper limit (`-0.0698` rad), despite the
-named pose's nominal zero value. This is evidence that MoveIt/controller limits
-remain authoritative. It is not yet a full Phase 1 acceptance: stop/fault
-behavior and the complete structured skill-schema rejection matrix still need
-implementation and evidence.
+The deterministic rules provider used for the physical integration run is a
+repeatable intent-test fixture, not a substitute for the LLM. The combined
+audio-to-LLM-to-simulator run requires an API key on the temporary GPU instance;
+credentials are not transferred there without explicit authorization.
+
+## Acceptance status
+
+Criteria 1–4 and 6–11 have passing automated and/or live-simulator evidence.
+The software execution supervisor also has passing tests showing that stop,
+backend faults, and deadline expiration call cancellation and prevent following
+primitives. Before final Phase 1 safety sign-off, criterion 5 should additionally
+be exercised as a live mid-motion stop/fault injection against the running
+Isaac/MoveIt stack, with before/after robot state and logs retained. Until that
+test is captured, the integrated manipulation demo is accepted, but the broader
+Phase 1 safety campaign remains open.

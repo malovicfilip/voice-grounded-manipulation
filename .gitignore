@@ -15,6 +15,10 @@ env/
 .coverage
 htmlcov/
 
+# Local voice input and credentials
+*.wav
+*.flac
+
 # ROS 2 and colcon
 ros2_ws/build/
 ros2_ws/install/

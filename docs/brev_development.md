@@ -405,6 +405,87 @@ MoveIt process group. NVIDIA's matching references are the
 [ROS 2 installation guide](https://docs.isaacsim.omniverse.nvidia.com/6.0.1/installation/install_ros.html),
 and [IsaacSim ROS workspaces](https://github.com/isaac-sim/IsaacSim-ros_workspaces/tree/IsaacSim-6.0.1).
 
+## Integrated voice-grounded manipulation demo
+
+Build both project packages after synchronizing a new commit:
+
+```bash
+cd /home/ubuntu/workspace/ros2_ws
+/home/ubuntu/.pixi/bin/pixi run --manifest-path pixi.toml \
+  bash -c 'source install/setup.bash && colcon build \
+  --packages-select vgm_moveit_demo vgm_runtime'
+```
+
+`source install/setup.bash` makes the existing NVIDIA and project overlays
+visible. `colcon build --packages-select ...` rebuilds only this repository's
+two packages, leaving the pinned upstream workspace unchanged.
+
+Run the deterministic acceptance path first:
+
+```bash
+cd /home/ubuntu/workspace
+ACCEPT_EULA=Y isaac_sim/scripts/run_voice_manipulation_demo.sh \
+  --transcript "Pick the red cube and place it on the blue target" \
+  --provider rules \
+  --run-id integrated-rules-v9
+```
+
+`ACCEPT_EULA=Y` applies only to the Isaac Sim container. `--transcript` supplies
+the command without recording audio. `--provider rules` selects the
+deterministic intent fixture so simulator acceptance does not depend on an
+external API. `--run-id` creates one unique, ignored evidence directory and
+prevents accidental overwrites.
+
+The launcher performs these gates in order:
+
+1. Start the pinned Isaac Sim 6.0.1 container and ROS bridge without publishing
+   a port.
+2. Capture and ground an initial RGB-D scene.
+3. Produce and strictly validate one high-level skill.
+4. Start the headless MoveIt stack and require active arm and joint-state
+   controllers.
+5. Capture a fresh scene, reject stale state or more than 1 cm of commanded
+   object drift, and regenerate the deterministic task plan.
+6. Execute the allowlisted pick-and-place through MoveIt at no more than 20%
+   velocity/acceleration scaling.
+7. Capture final RGB-D evidence and reject success unless the placed object is
+   confidently observed within 6 cm of the allowlisted target.
+
+Use the constrained LLM path only when `OPENAI_API_KEY` is available as an
+environment variable or in the ignored `/home/ubuntu/workspace/.env.local`:
+
+```bash
+ACCEPT_EULA=Y isaac_sim/scripts/run_voice_manipulation_demo.sh \
+  --transcript "Pick the red cube and place it on the blue target" \
+  --provider openai
+```
+
+The OpenAI adapter uses strict JSON-schema output from `gpt-5.6-terra`, offers
+no tools, requests no model-generated coordinates, disables response storage,
+and passes the proposal through the same deterministic gates. Do not copy an API
+key to the temporary instance or commit `.env.local` without the credential
+owner's explicit authorization.
+
+For a spoken command, provide exactly one local audio file instead of a
+transcript:
+
+```bash
+ACCEPT_EULA=Y isaac_sim/scripts/run_voice_manipulation_demo.sh \
+  --audio /tmp/vgm-spoken-command.wav
+```
+
+Audio mode uses the pinned local `faster-whisper` `small.en` model (CPU/int8)
+and then the constrained OpenAI provider. Empty or low-confidence transcripts
+fail before intent extraction. The first model use may download weights into
+the user's persistent cache. Audio is read locally and is not written to the
+audit log.
+
+A successful directory under `isaac_sim/_output/<run-id>/` contains the initial,
+verification, and final grounded scenes; RGB/depth artifacts; decision and
+revalidated execution plan; component logs; final outcome validation; audit
+events; and `manifest.json`. These are generated evidence and remain ignored by
+Git because they can be large or contain user input.
+
 ## Session shutdown
 
 Commit and push all work, stop the instance, and verify its state:
