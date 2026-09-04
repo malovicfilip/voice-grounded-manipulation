@@ -71,6 +71,9 @@
     "position": [0.35, -1.1, 1.35],
     "look_at": [0.05, 0.0, 0.75],
     "resolution": [640, 480],
+    "focal_length_mm": 18.0,
+    "horizontal_aperture_mm": 20.955,
+    "vertical_aperture_mm": 15.71625,
     "clipping_range_m": [0.05, 5.0],
     "streams": {
       "rgb": true,
@@ -125,6 +128,22 @@
       "size_m": 0.05,
       "mass_kg": 0.08,
       "color_rgb": [0.05, 0.75, 0.8]
+    }
+  ],
+  "targets": [
+    {
+      "target_id": "blue_target",
+      "prim_path": "/World/Targets/BlueTarget",
+      "position": [0.0, 0.3, 0.751],
+      "radius_m": 0.06,
+      "color_rgb": [0.02, 0.05, 0.25]
+    },
+    {
+      "target_id": "yellow_target",
+      "prim_path": "/World/Targets/YellowTarget",
+      "position": [0.0, -0.3, 0.751],
+      "radius_m": 0.06,
+      "color_rgb": [0.3, 0.22, 0.01]
     }
   ],
   "constraints": {

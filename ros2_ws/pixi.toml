@@ -25,6 +25,10 @@ compilers = ">=1.11.0,<2"
 make = ">=4.4.1,<5"
 ninja = ">=1.13.2,<2"
 
+[pypi-dependencies]
+# CTranslate2-backed local speech recognition; no PyTorch or cloud audio upload.
+faster-whisper = ">=1.2,<2"
+
 [activation.env]
 ROS_DISTRO = "jazzy"
 ROS_DOMAIN_ID = "0"

@@ -147,11 +147,32 @@ class Phase1SceneConfigTest(unittest.TestCase):
         self.assertEqual(camera['sensor_id'], 'workspace_rgbd')
         self.assertTrue(camera['streams']['rgb'])
         self.assertTrue(camera['streams']['depth'])
+        self.assertGreater(camera['focal_length_mm'], 0.0)
+        self.assertGreater(camera['horizontal_aperture_mm'], 0.0)
+        self.assertGreater(camera['vertical_aperture_mm'], 0.0)
         self.assertEqual(camera['resolution'], [640, 480])
         self.assertLess(
             camera['clipping_range_m'][0], camera['clipping_range_m'][1]
         )
         self.assertNotEqual(camera['position'], camera['look_at'])
+
+    def test_placement_targets_are_unique_and_on_the_table(self):
+        targets = self.config['targets']
+        self.assertEqual(
+            {target['target_id'] for target in targets},
+            {'blue_target', 'yellow_target'},
+        )
+        self.assertEqual(len({target['prim_path'] for target in targets}), 2)
+        cube_colors = {tuple(cube['color_rgb']) for cube in self.config['cubes']}
+        self.assertTrue(
+            all(tuple(target['color_rgb']) not in cube_colors for target in targets)
+        )
+        for target in targets:
+            self.assertAlmostEqual(
+                target['position'][2],
+                self.config['table']['surface_height_m'] + 0.001,
+            )
+            self.assertGreater(target['radius_m'], 0.0)
 
     def test_contract_contains_no_direct_control_fields(self):
         """Reject low-level robot-control fields from scene configuration."""

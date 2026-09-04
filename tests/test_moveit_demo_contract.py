@@ -13,6 +13,13 @@ PACKAGE_ROOT = ROS_WORKSPACE / "src" / "vgm_moveit_demo"
 SKILL_SOURCE = PACKAGE_ROOT / "src" / "safe_named_pose.cpp"
 DEMO_LAUNCHER = REPOSITORY_ROOT / "isaac_sim" / "scripts" / "run_moveit_demo.sh"
 ISAAC_SCENE = REPOSITORY_ROOT / "isaac_sim" / "scripts" / "run_moveit_scene.py"
+INTEGRATED_SCENE = (
+    REPOSITORY_ROOT / "isaac_sim" / "scripts" / "run_integrated_scene.py"
+)
+PICK_PLACE_SOURCE = PACKAGE_ROOT / "src" / "safe_pick_and_place.cpp"
+VOICE_DEMO = (
+    REPOSITORY_ROOT / "isaac_sim" / "scripts" / "run_voice_manipulation_demo.sh"
+)
 
 
 class MoveItDemoContractTest(unittest.TestCase):
@@ -74,6 +81,34 @@ class MoveItDemoContractTest(unittest.TestCase):
             manifest["activation"]["env"]["RMW_IMPLEMENTATION"],
             "rmw_fastrtps_cpp",
         )
+        self.assertIn("faster-whisper", manifest["pypi-dependencies"])
+
+    def test_pick_and_place_executor_is_allowlisted_and_moveit_only(self):
+        source = PICK_PLACE_SOURCE.read_text(encoding="utf-8")
+        self.assertIn("MoveGroupInterface", source)
+        self.assertIn("PlanningSceneInterface", source)
+        self.assertIn("kVelocityScale = 0.20", source)
+        self.assertIn("kAccelerationScale = 0.20", source)
+        self.assertIn('"blue_target"', source)
+        self.assertIn('"yellow_target"', source)
+        self.assertNotIn("create_publisher", source)
+        self.assertNotIn("trajectory_msgs", source)
+        self.assertNotIn("joint_trajectory", source)
+
+    def test_integrated_demo_revalidates_rgbd_before_moveit(self):
+        scene_source = INTEGRATED_SCENE.read_text(encoding="utf-8")
+        launcher_source = VOICE_DEMO.read_text(encoding="utf-8")
+        self.assertIn('get_data("rgb")', scene_source)
+        self.assertIn('get_data("distance_to_image_plane")', scene_source)
+        self.assertIn("capture_verification.request", scene_source)
+        self.assertIn("execution_gate", launcher_source)
+        self.assertLess(
+            launcher_source.index("execution_gate"),
+            launcher_source.index("safe_pick_and_place.launch.py"),
+        )
+        self.assertIn("nvcr.io/nvidia/isaac-sim:6.0.1", launcher_source)
+        self.assertNotIn(" --publish ", launcher_source)
+        self.assertNotIn(" -p ", launcher_source)
 
 
 if __name__ == "__main__":

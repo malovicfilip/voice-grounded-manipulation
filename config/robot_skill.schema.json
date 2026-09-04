@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://voice-grounded-manipulation.local/schemas/robot-skill-v1.json",
+  "title": "Validated high-level robot skill proposal",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "request_id",
+    "skill",
+    "object_id",
+    "target_id",
+    "pose_name",
+    "reason",
+    "scene_revision"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "request_id": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$"
+    },
+    "skill": {
+      "type": "string",
+      "enum": [
+        "move_named_pose",
+        "open_gripper",
+        "close_gripper",
+        "pick",
+        "place",
+        "pick_and_place",
+        "stop",
+        "refuse"
+      ]
+    },
+    "object_id": {
+      "type": ["string", "null"],
+      "pattern": "^[a-z][a-z0-9_]{0,63}$"
+    },
+    "target_id": {
+      "type": ["string", "null"],
+      "pattern": "^[a-z][a-z0-9_]{0,63}$"
+    },
+    "pose_name": {
+      "type": ["string", "null"],
+      "enum": ["ready", "extended", "transport", null]
+    },
+    "reason": {
+      "type": ["string", "null"],
+      "maxLength": 240
+    },
+    "scene_revision": {
+      "type": ["string", "null"],
+      "pattern": "^[a-f0-9]{16}$"
+    }
+  }
+}

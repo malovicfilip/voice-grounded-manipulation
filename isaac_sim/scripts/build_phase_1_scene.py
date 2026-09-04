@@ -209,6 +209,10 @@ def _create_robot(stage, config, assets_root):
     robot_prim.GetReferences().AddReference(asset_path)
     pose = robot['base_pose']
     _set_transform(robot_prim, pose['position'], pose['yaw_degrees'])
+    robot_prim.GetVariantSet('Gripper').SetVariantSelection(
+        'AlternateFinger'
+    )
+    robot_prim.GetVariantSet('Mesh').SetVariantSelection('Quality')
     robot_prim.CreateAttribute(
         'vgm:objectId', Sdf.ValueTypeNames.String
     ).Set(robot['object_id'])
@@ -230,6 +234,24 @@ def _create_cubes(stage, config):
             mass_kg=cube['mass_kg'],
             object_id=cube['object_id'],
         )
+
+
+def _create_target_markers(stage, config):
+    """Create non-colliding visual placement targets on the table."""
+    from pxr import Gf, Sdf, UsdGeom
+
+    UsdGeom.Xform.Define(stage, '/World/Targets')
+    for target in config.get('targets', []):
+        marker = UsdGeom.Cylinder.Define(stage, target['prim_path'])
+        marker.CreateAxisAttr(UsdGeom.Tokens.z)
+        marker.CreateRadiusAttr(float(target['radius_m']))
+        marker.CreateHeightAttr(0.002)
+        marker.CreateDisplayColorAttr([Gf.Vec3f(*target['color_rgb'])])
+        xformable = UsdGeom.Xformable(marker.GetPrim())
+        xformable.AddTranslateOp().Set(Gf.Vec3d(*target['position']))
+        marker.GetPrim().CreateAttribute(
+            'vgm:targetId', Sdf.ValueTypeNames.String
+        ).Set(target['target_id'])
 
 
 def _create_camera(stage, config):
@@ -257,6 +279,13 @@ def _create_camera(stage, config):
 
     near, far = camera_config['clipping_range_m']
     camera.CreateClippingRangeAttr(Gf.Vec2f(near, far))
+    camera.CreateFocalLengthAttr(float(camera_config['focal_length_mm']))
+    camera.CreateHorizontalApertureAttr(
+        float(camera_config['horizontal_aperture_mm'])
+    )
+    camera.CreateVerticalApertureAttr(
+        float(camera_config['vertical_aperture_mm'])
+    )
     camera.GetPrim().CreateAttribute(
         'vgm:sensorId', Sdf.ValueTypeNames.String
     ).Set(camera_config['sensor_id'])
@@ -295,6 +324,7 @@ def _author_scene(config):
     _create_static_workspace(stage, config)
     _create_robot(stage, config, assets_root)
     _create_cubes(stage, config)
+    _create_target_markers(stage, config)
     camera_sensor = _create_camera(stage, config)
     return stage, camera_sensor
 

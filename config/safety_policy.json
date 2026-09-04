@@ -1,0 +1,64 @@
+{
+  "policy_version": 1,
+  "allowed_skills": [
+    "move_named_pose",
+    "open_gripper",
+    "close_gripper",
+    "pick",
+    "place",
+    "pick_and_place",
+    "stop",
+    "refuse"
+  ],
+  "allowed_named_poses": ["ready", "extended", "transport"],
+  "targets": {
+    "blue_target": {
+      "position_m": [0.0, 0.3, 0.75]
+    },
+    "yellow_target": {
+      "position_m": [0.0, -0.3, 0.75]
+    }
+  },
+  "workspace_m": {
+    "x": [-0.55, 0.55],
+    "y": [-0.35, 0.35],
+    "z": [0.74, 1.35]
+  },
+  "minimum_object_confidence": 0.75,
+  "maximum_scene_age_s": 10.0,
+  "maximum_execution_time_s": 45.0,
+  "maximum_velocity_scale": 0.2,
+  "maximum_acceleration_scale": 0.2,
+  "pick": {
+    "approach_height_m": 0.12,
+    "grasp_height_offset_m": 0.015,
+    "retreat_height_m": 0.16
+  },
+  "place": {
+    "approach_height_m": 0.14,
+    "release_height_offset_m": 0.03,
+    "retreat_height_m": 0.18
+  },
+  "forbidden_fields": [
+    "joint",
+    "joints",
+    "joint_position",
+    "joint_positions",
+    "joint_target",
+    "joint_targets",
+    "velocity",
+    "velocities",
+    "joint_velocity",
+    "joint_velocities",
+    "motor",
+    "motors",
+    "motor_command",
+    "motor_commands",
+    "effort",
+    "efforts",
+    "torque",
+    "torques",
+    "trajectory",
+    "trajectories"
+  ]
+}

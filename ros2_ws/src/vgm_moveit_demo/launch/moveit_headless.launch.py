@@ -21,6 +21,10 @@ def generate_launch_description():
         default_value="true",
         description="Use Isaac Sim's /clock when true",
     )
+    base_x = DeclareLaunchArgument("base_x", default_value="0.0")
+    base_y = DeclareLaunchArgument("base_y", default_value="-0.64")
+    base_z = DeclareLaunchArgument("base_z", default_value="0.0")
+    base_yaw = DeclareLaunchArgument("base_yaw", default_value="0.0")
 
     isaac_moveit_share = get_package_share_directory("isaac_moveit")
     panda_config_share = get_package_share_directory(
@@ -49,15 +53,19 @@ def generate_launch_description():
         [
             hardware_type,
             use_sim_time,
+            base_x,
+            base_y,
+            base_z,
+            base_yaw,
             Node(
                 package="tf2_ros",
                 executable="static_transform_publisher",
                 name="static_transform_publisher_world_to_robot",
                 arguments=[
-                    "0.0",
-                    "-0.64",
-                    "0.0",
-                    "0.0",
+                    LaunchConfiguration("base_x"),
+                    LaunchConfiguration("base_y"),
+                    LaunchConfiguration("base_z"),
+                    LaunchConfiguration("base_yaw"),
                     "0.0",
                     "0.0",
                     "world",
