@@ -99,6 +99,31 @@ class PerceptionGroundingTest(unittest.TestCase):
         self.assertLess(observation.position_m[1], 0.0)
         self.assertEqual(observation.pixel_count, 25)
 
+    def test_revision_ignores_sub_bin_jitter_but_detects_motion(self):
+        red = np.array([204, 13, 13], dtype=np.uint8)
+        rgb = np.zeros((20, 20, 3), dtype=np.uint8)
+        rgb[8:12, 8:12] = red
+        depth = np.full((20, 20), np.nan, dtype=np.float32)
+        depth[8:12, 8:12] = 1.0
+        intrinsics = CameraIntrinsics(100.0, 100.0, 9.5, 9.5)
+        grounder = ColorDepthGrounder(self.config, minimum_pixels=4)
+
+        def revision_with_x_offset(offset):
+            transform = np.eye(4)
+            transform[0, 3] = -0.1 + offset
+            transform[1, 3] = -0.18
+            return grounder.ground(
+                rgb,
+                depth,
+                intrinsics,
+                transform,
+                captured_at_s=1.0,
+            ).revision
+
+        baseline = revision_with_x_offset(0.0)
+        self.assertEqual(baseline, revision_with_x_offset(0.001))
+        self.assertNotEqual(baseline, revision_with_x_offset(0.01))
+
 
 if __name__ == "__main__":
     unittest.main()

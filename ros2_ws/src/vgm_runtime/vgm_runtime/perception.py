@@ -204,11 +204,13 @@ class ColorDepthGrounder:
         revision_payload = [
             {
                 "object_id": object_id,
-                # Millimeter quantization keeps a static scene revision stable
-                # across harmless renderer/depth jitter while still detecting
-                # meaningful object motion before execution.
-                "position_m": [round(value, 3) for value in observations[object_id].position_m],
-                "confidence": round(observations[object_id].confidence, 4),
+                # Five-millimeter bins keep a static scene revision stable
+                # across measured 1-2 mm RGB-D jitter. Confidence is enforced
+                # separately and must not make an unchanged geometry stale.
+                "position_bin_5mm": [
+                    int(round(value / 0.005))
+                    for value in observations[object_id].position_m
+                ],
             }
             for object_id in sorted(observations)
         ]
