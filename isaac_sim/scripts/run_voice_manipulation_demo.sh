@@ -171,6 +171,20 @@ if [[ ! -s "${HOST_OUTPUT}/initial_grounded_scene.json" ]]; then
   exit 1
 fi
 
+if [[ -n "${TRANSCRIPT}" ]]; then
+  run_ros ros2 run vgm_runtime intent_cli \
+    --transcript "${TRANSCRIPT}" \
+    --scene-json "${HOST_OUTPUT}/initial_grounded_scene.json" \
+    --provider "${PROVIDER}" \
+    --audit-jsonl "${HOST_OUTPUT}/audit.jsonl" \
+    >"${HOST_OUTPUT}/decision.json"
+else
+  run_ros ros2 run vgm_runtime voice_cli "${AUDIO_PATH}" \
+    --scene-json "${HOST_OUTPUT}/initial_grounded_scene.json" \
+    --audit-jsonl "${HOST_OUTPUT}/audit.jsonl" \
+    >"${HOST_OUTPUT}/decision.json"
+fi
+
 setsid env FASTRTPS_DEFAULT_PROFILES_FILE="${FAST_DDS_PROFILE}" \
   "${PIXI_BIN}" run --manifest-path "${ROS_WORKSPACE}/pixi.toml" \
   bash -c 'source "$1"; shift; exec "$@"' \
@@ -194,20 +208,6 @@ done
 if [[ "${controllers_ready}" != "true" ]]; then
   echo 'Timed out waiting for active MoveIt controllers.' >&2
   exit 1
-fi
-
-if [[ -n "${TRANSCRIPT}" ]]; then
-  run_ros ros2 run vgm_runtime intent_cli \
-    --transcript "${TRANSCRIPT}" \
-    --scene-json "${HOST_OUTPUT}/initial_grounded_scene.json" \
-    --provider "${PROVIDER}" \
-    --audit-jsonl "${HOST_OUTPUT}/audit.jsonl" \
-    >"${HOST_OUTPUT}/decision.json"
-else
-  run_ros ros2 run vgm_runtime voice_cli "${AUDIO_PATH}" \
-    --scene-json "${HOST_OUTPUT}/initial_grounded_scene.json" \
-    --audit-jsonl "${HOST_OUTPUT}/audit.jsonl" \
-    >"${HOST_OUTPUT}/decision.json"
 fi
 
 touch "${HOST_OUTPUT}/capture_verification.request"

@@ -35,11 +35,18 @@ class PerceptionGroundingTest(unittest.TestCase):
             rgb,
             depth,
             CameraIntrinsics(100.0, 100.0, 9.5, 9.5),
-            np.eye(4),
+            np.array(
+                [
+                    [1.0, 0.0, 0.0, -0.1],
+                    [0.0, 1.0, 0.0, -0.18],
+                    [0.0, 0.0, 1.0, 0.0],
+                    [0.0, 0.0, 0.0, 1.0],
+                ]
+            ),
         )
         observation = scene.objects["red_cube"]
-        self.assertAlmostEqual(observation.position_m[0], 0.0, places=6)
-        self.assertAlmostEqual(observation.position_m[1], 0.0, places=6)
+        self.assertAlmostEqual(observation.position_m[0], -0.1, places=6)
+        self.assertAlmostEqual(observation.position_m[1], -0.18, places=6)
         self.assertAlmostEqual(observation.position_m[2], 0.775, places=6)
         self.assertGreaterEqual(observation.confidence, 0.95)
         self.assertEqual(len(scene.revision), 16)
@@ -68,6 +75,29 @@ class PerceptionGroundingTest(unittest.TestCase):
             captured_at_s=1.0,
         )
         self.assertEqual(dict(scene.objects), {})
+
+    def test_disconnected_same_color_marker_does_not_shift_cube(self):
+        red = np.array([204, 13, 13], dtype=np.uint8)
+        rgb = np.zeros((40, 40, 3), dtype=np.uint8)
+        rgb[8:13, 8:13] = red
+        rgb[25:35, 25:35] = red
+        depth = np.full((40, 40), np.nan, dtype=np.float32)
+        depth[8:13, 8:13] = 1.0
+        depth[25:35, 25:35] = 1.0
+        transform = np.eye(4)
+        transform[0, 3] = -0.105
+        transform[1, 3] = -0.185
+        scene = ColorDepthGrounder(self.config, minimum_pixels=4).ground(
+            rgb,
+            depth,
+            CameraIntrinsics(100.0, 100.0, 9.5, 9.5),
+            transform,
+            captured_at_s=1.0,
+        )
+        observation = scene.objects["red_cube"]
+        self.assertLess(observation.position_m[0], 0.0)
+        self.assertLess(observation.position_m[1], 0.0)
+        self.assertEqual(observation.pixel_count, 25)
 
 
 if __name__ == "__main__":

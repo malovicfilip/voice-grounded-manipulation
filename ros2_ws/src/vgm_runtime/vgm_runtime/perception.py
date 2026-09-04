@@ -14,6 +14,33 @@ import numpy as np
 from .types import GroundedScene, ObjectObservation
 
 
+def _connected_components(mask: np.ndarray) -> list[tuple[np.ndarray, np.ndarray]]:
+    """Return four-connected true-pixel regions without an OpenCV dependency."""
+    height, width = mask.shape
+    remaining = set(int(index) for index in np.flatnonzero(mask))
+    components: list[tuple[np.ndarray, np.ndarray]] = []
+    while remaining:
+        seed = remaining.pop()
+        stack = [seed]
+        indices = [seed]
+        while stack:
+            index = stack.pop()
+            row, column = divmod(index, width)
+            for neighbor in (
+                index - width if row > 0 else -1,
+                index + width if row + 1 < height else -1,
+                index - 1 if column > 0 else -1,
+                index + 1 if column + 1 < width else -1,
+            ):
+                if neighbor in remaining:
+                    remaining.remove(neighbor)
+                    stack.append(neighbor)
+                    indices.append(neighbor)
+        values = np.asarray(indices, dtype=np.int64)
+        components.append((values // width, values % width))
+    return components
+
+
 @dataclass(frozen=True, slots=True)
 class CameraIntrinsics:
     fx: float
@@ -47,6 +74,10 @@ class ColorDepthGrounder:
         if self.minimum_pixels < 1:
             raise ValueError("minimum_pixels must be positive")
         self._object_ids = tuple(cube["object_id"] for cube in scene_config["cubes"])
+        self._expected_positions = {
+            cube["object_id"]: tuple(float(value) for value in cube["position"])
+            for cube in scene_config["cubes"]
+        }
         surface_height = float(scene_config["table"]["surface_height_m"])
         self._object_center_z = {
             cube["object_id"]: surface_height + float(cube["size_m"]) / 2.0
@@ -98,53 +129,76 @@ class ColorDepthGrounder:
                 & (nearest_distance <= self.color_distance_threshold)
                 & finite_depth
             )
-            rows, columns = np.nonzero(mask)
-            if rows.size < self.minimum_pixels:
-                continue
+            candidates = []
+            expected = self._expected_positions[object_id]
+            for rows, columns in _connected_components(mask):
+                if rows.size < self.minimum_pixels:
+                    continue
+                object_depths = depth_array[rows, columns]
+                median_depth = float(np.median(object_depths))
+                median_row = float(np.median(rows))
+                median_column = float(np.median(columns))
+                camera_point = np.array(
+                    [
+                        (median_column - intrinsics.cx) * median_depth / intrinsics.fx,
+                        (median_row - intrinsics.cy) * median_depth / intrinsics.fy,
+                        median_depth,
+                        1.0,
+                    ],
+                    dtype=np.float64,
+                )
+                world_point = transform @ camera_point
+                if not np.isfinite(world_point[:3]).all() or abs(world_point[3]) < 1e-9:
+                    continue
+                projected = [
+                    float(value / world_point[3]) for value in world_point[:3]
+                ]
+                position = (
+                    projected[0],
+                    projected[1],
+                    self._object_center_z[object_id],
+                )
+                location_error = math.hypot(
+                    position[0] - expected[0], position[1] - expected[1]
+                )
+                if location_error > 0.15:
+                    continue
 
-            object_depths = depth_array[rows, columns]
-            median_depth = float(np.median(object_depths))
-            median_row = float(np.median(rows))
-            median_column = float(np.median(columns))
-            camera_point = np.array(
-                [
-                    (median_column - intrinsics.cx) * median_depth / intrinsics.fx,
-                    (median_row - intrinsics.cy) * median_depth / intrinsics.fy,
-                    median_depth,
-                    1.0,
-                ],
-                dtype=np.float64,
-            )
-            world_point = transform @ camera_point
-            if not np.isfinite(world_point[:3]).all() or abs(world_point[3]) < 1e-9:
+                component_distances = nearest_distance[rows, columns]
+                mean_color_distance = float(np.mean(component_distances))
+                median_absolute_deviation = float(
+                    np.median(np.abs(object_depths - median_depth))
+                )
+                color_score = max(
+                    0.0,
+                    1.0 - mean_color_distance / self.color_distance_threshold,
+                )
+                area_score = min(
+                    1.0, rows.size / (self.minimum_pixels * 4.0)
+                )
+                depth_score = max(
+                    0.0, 1.0 - median_absolute_deviation / 0.03
+                )
+                location_score = max(0.0, 1.0 - location_error / 0.15)
+                confidence = float(
+                    0.20 * color_score
+                    + 0.25 * area_score
+                    + 0.20 * depth_score
+                    + 0.35 * location_score
+                )
+                candidates.append(
+                    (location_error, -rows.size, position, confidence, rows.size)
+                )
+            if not candidates:
                 continue
-            projected = [float(value / world_point[3]) for value in world_point[:3]]
-            # RGB-D supplies the horizontal location. The configured tabletop
-            # and known cube size remove the visible-surface bias from depth so
-            # planning receives the physical cube center, not its top face.
-            position = (
-                projected[0],
-                projected[1],
-                self._object_center_z[object_id],
-            )
-
-            mean_color_distance = float(np.mean(nearest_distance[mask]))
-            median_absolute_deviation = float(
-                np.median(np.abs(object_depths - median_depth))
-            )
-            color_score = max(
-                0.0, 1.0 - mean_color_distance / self.color_distance_threshold
-            )
-            area_score = min(1.0, rows.size / (self.minimum_pixels * 4.0))
-            depth_score = max(0.0, 1.0 - median_absolute_deviation / 0.03)
-            confidence = float(0.55 * color_score + 0.25 * area_score + 0.20 * depth_score)
+            _, _, position, confidence, pixel_count = min(candidates)
             observations[object_id] = ObjectObservation(
                 object_id=object_id,
                 position_m=position,
                 confidence=confidence,
                 observed_at_s=timestamp,
                 frame_id="world",
-                pixel_count=int(rows.size),
+                pixel_count=int(pixel_count),
             )
 
         revision_payload = [
