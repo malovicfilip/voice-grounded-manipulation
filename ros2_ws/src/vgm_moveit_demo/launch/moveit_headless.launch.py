@@ -4,7 +4,8 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
+from launch.actions import DeclareLaunchArgument, RegisterEventHandler
+from launch.event_handlers import OnProcessExit
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from moveit_configs_utils import MoveItConfigsBuilder
@@ -49,6 +50,16 @@ def generate_launch_description():
     )
 
     common_time = {"use_sim_time": LaunchConfiguration("use_sim_time")}
+    joint_state_spawner = Node(
+        package="controller_manager",
+        executable="spawner",
+        arguments=["joint_state_broadcaster", "-c", "/controller_manager"],
+    )
+    arm_spawner = Node(
+        package="controller_manager",
+        executable="spawner",
+        arguments=["panda_arm_controller", "-c", "/controller_manager"],
+    )
     return LaunchDescription(
         [
             hardware_type,
@@ -97,15 +108,12 @@ def generate_launch_description():
                 ],
                 output="screen",
             ),
-            Node(
-                package="controller_manager",
-                executable="spawner",
-                arguments=["joint_state_broadcaster", "-c", "/controller_manager"],
-            ),
-            Node(
-                package="controller_manager",
-                executable="spawner",
-                arguments=["panda_arm_controller", "-c", "/controller_manager"],
+            joint_state_spawner,
+            RegisterEventHandler(
+                OnProcessExit(
+                    target_action=joint_state_spawner,
+                    on_exit=[arm_spawner],
+                )
             ),
             Node(
                 package="isaac_moveit",

@@ -160,6 +160,17 @@ if [[ ! -f "${HOST_OUTPUT}/bridge.ready" ]]; then
   exit 1
 fi
 
+touch "${HOST_OUTPUT}/capture_initial.request"
+for _ in {1..420}; do
+  [[ -s "${HOST_OUTPUT}/initial_grounded_scene.json" ]] && break
+  kill -0 "${ISAAC_PID}" 2>/dev/null || break
+  sleep 2
+done
+if [[ ! -s "${HOST_OUTPUT}/initial_grounded_scene.json" ]]; then
+  echo 'Timed out waiting for the initial RGB-D grounding result.' >&2
+  exit 1
+fi
+
 setsid env FASTRTPS_DEFAULT_PROFILES_FILE="${FAST_DDS_PROFILE}" \
   "${PIXI_BIN}" run --manifest-path "${ROS_WORKSPACE}/pixi.toml" \
   bash -c 'source "$1"; shift; exec "$@"' \
@@ -182,17 +193,6 @@ for _ in {1..90}; do
 done
 if [[ "${controllers_ready}" != "true" ]]; then
   echo 'Timed out waiting for active MoveIt controllers.' >&2
-  exit 1
-fi
-
-touch "${HOST_OUTPUT}/capture_initial.request"
-for _ in {1..420}; do
-  [[ -s "${HOST_OUTPUT}/initial_grounded_scene.json" ]] && break
-  kill -0 "${ISAAC_PID}" 2>/dev/null || break
-  sleep 2
-done
-if [[ ! -s "${HOST_OUTPUT}/initial_grounded_scene.json" ]]; then
-  echo 'Timed out waiting for the initial RGB-D grounding result.' >&2
   exit 1
 fi
 

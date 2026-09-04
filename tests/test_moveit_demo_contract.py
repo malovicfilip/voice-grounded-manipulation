@@ -110,6 +110,14 @@ class MoveItDemoContractTest(unittest.TestCase):
         self.assertNotIn(" --publish ", launcher_source)
         self.assertNotIn(" -p ", launcher_source)
 
+    def test_controller_activation_waits_for_joint_state_broadcaster(self):
+        source = (
+            PACKAGE_ROOT / "launch" / "moveit_headless.launch.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn("OnProcessExit", source)
+        self.assertIn("target_action=joint_state_spawner", source)
+        self.assertIn("on_exit=[arm_spawner]", source)
+
 
 if __name__ == "__main__":
     unittest.main()
