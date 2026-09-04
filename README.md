@@ -46,12 +46,15 @@ The first milestone establishes a reproducible simulation and an end-to-end, saf
 See [`docs/local_development.md`](docs/local_development.md) for the verified
 Ubuntu 24.04 WSL, ROS 2 Jazzy, and workspace setup.
 
+See [`docs/brev_development.md`](docs/brev_development.md) for the NVIDIA Brev
+GPU environment, cost guard, SSH/VS Code connection, and persistence workflow.
+
 ## Current status
 
 The local Ubuntu 24.04 development environment is configured with ROS 2 Jazzy
 and the ROS development tools. The official publisher/subscriber demo and the
 empty `ros2_ws` baseline build have passed. The versioned Phase 1 scene contract
-and its Isaac Sim 6.0 builder pass all simulator-independent tests. AWS GPU
-quota approval is pending; no instance has been launched and no cloud cost has
-been incurred. Isaac Sim, MoveIt 2, and application packages have not been
-installed yet.
+and its builder pass all simulator-independent tests. A stoppable NVIDIA Brev
+GPU environment has been verified with an NVIDIA L4, 8 CPUs, 32 GiB system RAM,
+and persistent project storage under `/home/ubuntu/workspace`. Isaac Sim 6.0.1,
+MoveIt 2, and application packages have not been installed yet.

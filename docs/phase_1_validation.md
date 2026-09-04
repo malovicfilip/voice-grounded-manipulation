@@ -20,7 +20,7 @@ contract and safety boundary can be checked in WSL without a GPU:
 python3 isaac_sim/scripts/build_phase_1_scene.py --validate-only
 ```
 
-On a workstation with Isaac Sim 6.0, run the same script through Isaac Sim's
+On a workstation with Isaac Sim 6.0.1, run the same script through Isaac Sim's
 Python launcher. The output path is ignored by Git because it is generated:
 
 ```bash
@@ -29,7 +29,7 @@ Python launcher. The output path is ignored by Git because it is generated:
 ```
 
 The builder uses NVIDIA's current
-[RTX camera API](https://docs.isaacsim.omniverse.nvidia.com/6.0.0/py/source/extensions/isaacsim.sensors.experimental.rtx/docs/index.html)
+[RTX camera API](https://docs.isaacsim.omniverse.nvidia.com/6.0.1/py/source/extensions/isaacsim.sensors.experimental.rtx/docs/index.html)
 with `rgb` and `distance_to_image_plane` annotators. The JSON stores resolution
 as `[width, height]`; the API receives `(height, width)` as required by its
 OpenCV/NumPy convention.
