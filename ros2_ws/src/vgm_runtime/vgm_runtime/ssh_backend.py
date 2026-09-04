@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 import shlex
 import subprocess
+import time
 
 from .serialization import scene_from_mapping
 
@@ -17,6 +19,19 @@ class SSHBackend:
         if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,100}", host):
             raise ValueError("invalid SSH host alias")
         self.session, self.host = session, host
+        self._clock_anchor = None
+
+    def clock(self):
+        """Use the sensor host's clock domain for preliminary WSL validation.
+
+        Network transit is not a freshness authorization: the remote executor
+        always validates against its actual wall clock again before motion.
+        Sensor timestamps are preserved unchanged on both sides of SSH.
+        """
+        if self._clock_anchor is None:
+            raise RuntimeError("capture remote state before using the sensor clock")
+        server_time, received_monotonic = self._clock_anchor
+        return server_time + (time.monotonic() - received_monotonic)
 
     def request(self, operation: str, **fields):
         script = (
@@ -40,6 +55,10 @@ class SSHBackend:
         response = json.loads(lines[-1])
         if completed.returncode or not response.get("ok"):
             raise RuntimeError(response.get("message", "remote operation failed"))
+        server_time = response.get("server_time_s")
+        if type(server_time) not in {int, float} or not math.isfinite(server_time):
+            raise RuntimeError("remote clock metadata is unavailable or invalid")
+        self._clock_anchor = (server_time, time.monotonic())
         return response["result"]
 
     def capture(self):

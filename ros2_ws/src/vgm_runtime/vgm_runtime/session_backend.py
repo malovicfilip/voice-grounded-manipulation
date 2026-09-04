@@ -301,7 +301,7 @@ def main():
             result = {"text": transcript.text, "confidence": transcript.confidence, "language": transcript.language}
         else:
             raise ValueError("unknown session operation")
-        print(json.dumps({"ok": True, "result": result}, allow_nan=False))
+        print(json.dumps({"ok": True, "result": result, "server_time_s": time.time()}, allow_nan=False))
     except Exception as error:
         print(json.dumps({"ok": False, "error": type(error).__name__, "message": str(error)}))
         raise SystemExit(2)

@@ -125,8 +125,9 @@ class PendingTask:
 
 
 class TaskSession:
-    def __init__(self, model, backend: TaskBackend, audit: AuditLogger, *, clock=time.time):
-        self.model, self.backend, self.audit, self.clock = model, backend, audit, clock
+    def __init__(self, model, backend: TaskBackend, audit: AuditLogger, *, clock=None):
+        self.model, self.backend, self.audit = model, backend, audit
+        self.clock = clock if clock is not None else getattr(backend, "clock", time.time)
         self.policy = load_json_config("safety_policy.json")
         self.pending: PendingTask | None = None
         self.state = "idle"
