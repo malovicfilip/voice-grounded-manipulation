@@ -177,9 +177,10 @@ class SimulatorSession:
             xyz = selected.position_m if selected else (0.0, 0.0, 0.775)
             command = ["ros2", "launch", "vgm_moveit_demo", "safe_pick_and_place.launch.py",
                        f"request_id:={request_id}", f"skill:={proposal['skill']}",
-                       f"object_id:={proposal['object_id'] or ''}", f"target_id:={proposal['target_id'] or ''}",
-                       f"pose_name:={proposal['pose_name'] or ''}", f"scene_file:={scene_path}",
+                       f"scene_file:={scene_path}",
                        f"object_x:={xyz[0]}", f"object_y:={xyz[1]}", f"object_z:={xyz[2]}"]
+            command.extend(f"{key}:={proposal[key]}" for key in ("object_id", "target_id", "pose_name")
+                           if proposal[key] is not None)
             if inject_fault:
                 command.append("fault_before_primitive:=pick_approach")
             active = self.directory / "execution.active"

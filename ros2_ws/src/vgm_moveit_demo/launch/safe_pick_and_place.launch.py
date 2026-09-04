@@ -15,8 +15,8 @@ from moveit_configs_utils import MoveItConfigsBuilder
 def generate_launch_description():
     arguments = [
         DeclareLaunchArgument("request_id"),
-        DeclareLaunchArgument("object_id"),
-        DeclareLaunchArgument("target_id"),
+        DeclareLaunchArgument("object_id", default_value=""),
+        DeclareLaunchArgument("target_id", default_value=""),
         DeclareLaunchArgument("object_x"),
         DeclareLaunchArgument("object_y"),
         DeclareLaunchArgument("object_z"),
