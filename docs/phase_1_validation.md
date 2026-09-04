@@ -54,3 +54,29 @@ OpenCV/NumPy convention.
 ## Evidence required
 
 For each test, record the scene/configuration version, command or input fixture, expected result, observed result, relevant ROS 2 and simulation logs, and a pass/fail outcome. A Phase 1 pass requires no unexpected robot motion in any rejection test.
+
+## Current verified evidence
+
+The repository's 22 simulator-independent tests pass. Five of those tests cover
+the initial MoveIt boundary: an unknown named pose exits with status 2 before
+setup; the client has no ROS publisher; motion scaling is capped at 20%; the
+Isaac bridge contains no direct joint setters; and the environment pins Jazzy,
+Fast DDS, and Isaac Sim 6.0.1 without a second Isaac Sim installation.
+
+The `vgm_moveit_demo` package builds in the locked Pixi/RoboStack environment.
+A controller mock verified successful planning and execution for `extended`.
+With the real Isaac Sim Franka and ROS bridge, `ready` and `extended` both
+planned and executed successfully. The automated `moveit-visual-v3` run exited
+with status 0 after producing both 640 x 480 images, both joint-state snapshots,
+component logs, and a success manifest. Its final measured arm state for
+`extended` was approximately:
+
+```text
+[0.0001, -0.0005, 0.0001, -0.0698, 0.0001, 1.5709, 0.7850]
+```
+
+Joint 4 stopped at its configured upper limit (`-0.0698` rad), despite the
+named pose's nominal zero value. This is evidence that MoveIt/controller limits
+remain authoritative. It is not yet a full Phase 1 acceptance: stop/fault
+behavior and the complete structured skill-schema rejection matrix still need
+implementation and evidence.

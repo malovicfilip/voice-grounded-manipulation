@@ -316,6 +316,95 @@ authentication or encryption. Do not expose those ports without restricting
 them to the viewer's public IP and obtaining explicit approval first. See the
 [Isaac Sim container streaming guide](https://docs.isaacsim.omniverse.nvidia.com/6.0.1/installation/install_container.html).
 
+## ROS 2 Jazzy and MoveIt 2
+
+The verified Brev host is Ubuntu 22.04 (Jammy), while ROS 2 Jazzy targets Ubuntu
+24.04 (Noble). Do not add Noble ROS apt repositories to the Jammy host. Instead,
+keep Jazzy and MoveIt isolated in a project-local Pixi environment using the
+RoboStack Jazzy packages declared by `ros2_ws/pixi.toml`. Isaac Sim remains in
+the pinned NVIDIA container, so the environment does not download a duplicate
+Isaac Sim or PyTorch installation.
+
+Install Pixi in the remote user's home and verify it:
+
+```bash
+curl -fsSL https://pixi.sh/install.sh | bash
+/home/ubuntu/.pixi/bin/pixi --version
+```
+
+The first command runs Pixi's official user-level installer; the second proves
+which binary is available without relying on a newly modified shell `PATH`.
+Clone NVIDIA's matching ROS workspace tag and verify the pinned revision:
+
+```bash
+git clone --branch IsaacSim-6.0.1 --depth 1 \
+  https://github.com/isaac-sim/IsaacSim-ros_workspaces.git \
+  /home/ubuntu/IsaacSim-ros_workspaces
+git -C /home/ubuntu/IsaacSim-ros_workspaces rev-parse HEAD
+```
+
+The checkout supplies NVIDIA's Franka MoveIt configuration,
+`topic_based_ros2_control`, and Fast DDS profile. The verified tag resolves to
+commit `dd3eeed`. Install the locked project environment:
+
+```bash
+cd /home/ubuntu/workspace
+/home/ubuntu/.pixi/bin/pixi install --manifest-path ros2_ws/pixi.toml
+```
+
+`pixi install` resolves or reuses `ros2_ws/pixi.lock` and materializes the
+ignored `ros2_ws/.pixi` environment. Build only the five NVIDIA packages needed
+by this demo into the project workspace, then build the project package:
+
+```bash
+cd /home/ubuntu/workspace/ros2_ws
+/home/ubuntu/.pixi/bin/pixi run --manifest-path pixi.toml \
+  colcon build --base-paths /home/ubuntu/IsaacSim-ros_workspaces/jazzy_ws/src \
+  --packages-select isaac_moveit moveit_resources \
+  moveit_resources_panda_description moveit_resources_panda_moveit_config \
+  topic_based_ros2_control
+/home/ubuntu/.pixi/bin/pixi run --manifest-path pixi.toml \
+  bash -c 'source install/setup.bash && colcon build \
+  --packages-select vgm_moveit_demo'
+```
+
+The first build imports the pinned upstream sources but writes all colcon
+outputs beneath this repository's ignored `ros2_ws/{build,install,log}` paths.
+The second sources that overlay and compiles the constrained application.
+
+Run the live headless demo from the repository root:
+
+```bash
+cd /home/ubuntu/workspace
+ACCEPT_EULA=Y isaac_sim/scripts/run_moveit_demo.sh extended
+```
+
+The launcher validates the requested named pose before setup, starts the exact
+Isaac Sim 6.0.1 image, waits for a synchronized initial RGB capture, starts the
+headless MoveIt stack, requires active controllers, and invokes the constrained
+client. The client accepts only `ready`, `extended`, or `transport`, caps both
+velocity and acceleration scaling at 20%, and delegates planning and execution
+to MoveIt. It has no direct joint, velocity, motor, or trajectory publisher.
+
+The Isaac bridge uses NVIDIA's Fast DDS profile and Docker `--network=host` so
+ROS discovery works between the container and host. It publishes no Docker
+ports (`-p`/`--publish`) and this workflow makes no cloud firewall change. A
+successful output directory contains `initial.png`, `final.png`, initial and
+final joint-state YAML, Isaac/MoveIt/skill logs, and `manifest.json`. The
+launcher also stops its exact container and MoveIt process group on success or
+failure.
+
+The verified live run planned and executed both `ready` and `extended`. For the
+`extended` result, joint 4 settled at approximately `-0.0698` rad instead of the
+SRDF's nominal zero, demonstrating enforcement of the Panda joint limit rather
+than direct command passthrough. The final automated `moveit-visual-v3` run
+exited with status 0 and produced its two 640 x 480 RGB frames, joint-state
+snapshots, logs, and success manifest before cleaning up its container and
+MoveIt process group. NVIDIA's matching references are the
+[Isaac Sim 6.0.1 MoveIt tutorial](https://docs.isaacsim.omniverse.nvidia.com/6.0.1/ros2_tutorials/tutorial_ros2_moveit.html),
+[ROS 2 installation guide](https://docs.isaacsim.omniverse.nvidia.com/6.0.1/installation/install_ros.html),
+and [IsaacSim ROS workspaces](https://github.com/isaac-sim/IsaacSim-ros_workspaces/tree/IsaacSim-6.0.1).
+
 ## Session shutdown
 
 Commit and push all work, stop the instance, and verify its state:

@@ -49,4 +49,14 @@ Any failed validation, missing grounding, unsafe condition, planning failure, or
 
 ## Initial high-level skill boundary
 
-Phase 1 will define a minimal allowlist such as safe pose movement, gripper open/close, and a simulated stop/no-op. The exact schema, workspace bounds, confirmation policy, and preconditions will be versioned in configuration before live execution is enabled.
+The first executable boundary is an allowlisted `move_named_pose` demonstration
+with only `ready`, `extended`, and `transport`. The deterministic client rejects
+any other identifier before starting simulation or requesting a plan, caps
+velocity and acceleration scaling at 20%, and delegates all trajectory creation
+and execution to MoveIt 2. The Isaac bridge consumes only the resulting ROS
+control commands and does not expose a language-model control path.
+
+This is a narrow Phase 1 proof, not the final LLM interface. The complete
+structured skill schema, gripper operations, simulated stop/no-op, workspace
+bounds, perception grounding, confirmation policy, and preconditions must still
+be versioned and tested before voice-driven execution is enabled.

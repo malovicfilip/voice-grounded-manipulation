@@ -66,6 +66,29 @@ It does not publish network ports or call any robot-control interface. See the
 [Brev demo runbook](docs/brev_development.md#phase-1-visual-demo) for artifact
 copy and inspection commands.
 
+## Constrained MoveIt demo
+
+On the configured Brev instance, run an allowlisted named-pose skill through
+ROS 2 Jazzy and MoveIt 2 against the live Isaac Sim Franka:
+
+```bash
+cd /home/ubuntu/workspace
+ACCEPT_EULA=Y isaac_sim/scripts/run_moveit_demo.sh extended
+```
+
+The accepted targets are `ready`, `extended`, and `transport`; any other value
+is rejected before Isaac Sim or MoveIt starts. The application caps velocity
+and acceleration scaling at 20% and asks MoveIt to plan and execute the named
+pose. It never publishes joints or trajectories itself. Each successful run
+writes initial/final RGB images, initial/final joint-state snapshots, component
+logs, and a manifest under the git-ignored `isaac_sim/_output/` directory.
+
+Isaac Sim 6.0.1 can take several minutes to produce its first camera frame on
+this headless environment. Wait for the launcher's success result rather than
+assuming that a CPU-bound startup has failed. See the
+[Brev development runbook](docs/brev_development.md#ros-2-jazzy-and-moveit-2)
+for environment setup, build, and artifact details.
+
 ## Current status
 
 The local Ubuntu 24.04 development environment is configured with ROS 2 Jazzy
@@ -76,5 +99,8 @@ GPU environment has been verified with an NVIDIA L4, 8 CPUs, 32 GiB system RAM,
 and persistent project storage under `/home/ubuntu/workspace`. The official
 Isaac Sim 6.0.1 container passes NVIDIA's compatibility checker on that GPU, and
 the Phase 1 Franka/RGB-D scene builds successfully in headless mode. The visual
-demo captures RGB and metric-depth evidence without robot motion. MoveIt 2 and
-application packages have not been installed yet.
+demo captures RGB and metric-depth evidence without robot motion. An isolated,
+locked ROS 2 Jazzy and MoveIt 2 environment is installed on Brev, the project
+package builds, and both mocked and live-Isaac named-pose executions have
+passed. Phase 1 remains open until the remaining stop/fault and complete
+skill-schema rejection tests are implemented.
