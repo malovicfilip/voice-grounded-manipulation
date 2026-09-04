@@ -22,6 +22,7 @@ constexpr double kAccelerationScale = 0.20;
 constexpr double kPlanningTimeSeconds = 5.0;
 constexpr double kExecutionDeadlineSeconds = 120.0;
 constexpr double kCubeSize = 0.05;
+constexpr double kAttachedObjectClearance = 0.005;
 const std::set<std::string> kAllowedObjects = {
   "red_cube", "green_cube", "blue_cube", "yellow_cube", "magenta_cube", "cyan_cube"};
 const std::map<std::string, std::array<double, 3>> kAllowedTargets = {
@@ -228,8 +229,10 @@ private:
   bool attach_object(
     const std::string& object_id, const std::array<double, 3>& object_position)
   {
+    auto planning_position = object_position;
+    planning_position[2] += kAttachedObjectClearance;
     planning_scene_.applyCollisionObject(
-      make_box(object_id, object_position, {kCubeSize, kCubeSize, kCubeSize}));
+      make_box(object_id, planning_position, {kCubeSize, kCubeSize, kCubeSize}));
     const auto* hand_model = arm_.getRobotModel()->getJointModelGroup("hand");
     if (hand_model == nullptr) {
       RCLCPP_ERROR(node_->get_logger(), "MoveIt hand model is unavailable");

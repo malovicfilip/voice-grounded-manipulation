@@ -90,6 +90,7 @@ class MoveItDemoContractTest(unittest.TestCase):
         self.assertIn("kVelocityScale = 0.20", source)
         self.assertIn("kAccelerationScale = 0.20", source)
         self.assertIn("kExecutionDeadlineSeconds = 120.0", source)
+        self.assertIn("kAttachedObjectClearance = 0.005", source)
         self.assertIn('"blue_target"', source)
         self.assertIn('"yellow_target"', source)
         self.assertNotIn("create_publisher", source)
