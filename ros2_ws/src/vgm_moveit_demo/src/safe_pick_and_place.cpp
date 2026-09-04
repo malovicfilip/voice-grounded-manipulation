@@ -20,7 +20,7 @@ namespace
 constexpr double kVelocityScale = 0.20;
 constexpr double kAccelerationScale = 0.20;
 constexpr double kPlanningTimeSeconds = 5.0;
-constexpr double kExecutionDeadlineSeconds = 45.0;
+constexpr double kExecutionDeadlineSeconds = 120.0;
 constexpr double kCubeSize = 0.05;
 const std::set<std::string> kAllowedObjects = {
   "red_cube", "green_cube", "blue_cube", "yellow_cube", "magenta_cube", "cyan_cube"};
@@ -80,10 +80,10 @@ public:
     if (!move_hand("open", "open_gripper")) {
       return false;
     }
-    if (!move_arm(object_position[0], object_position[1], object_position[2] + 0.12, "pick_approach")) {
+    if (!move_arm(object_position[0], object_position[1], object_position[2] + 0.20, "pick_approach")) {
       return false;
     }
-    if (!move_arm(object_position[0], object_position[1], object_position[2] + 0.015, "pick_descend")) {
+    if (!move_arm(object_position[0], object_position[1], object_position[2] + 0.105, "pick_descend")) {
       return false;
     }
     if (!move_hand("close", "close_gripper")) {
@@ -92,13 +92,13 @@ public:
     if (!attach_object(object_id, object_position)) {
       return false;
     }
-    if (!move_arm(object_position[0], object_position[1], object_position[2] + 0.16, "pick_retreat")) {
+    if (!move_arm(object_position[0], object_position[1], object_position[2] + 0.23, "pick_retreat")) {
       return false;
     }
-    if (!move_arm(target[0], target[1], target[2] + 0.14, "place_approach")) {
+    if (!move_arm(target[0], target[1], target[2] + 0.25, "place_approach")) {
       return false;
     }
-    if (!move_arm(target[0], target[1], target[2] + 0.03, "place_descend")) {
+    if (!move_arm(target[0], target[1], target[2] + 0.13, "place_descend")) {
       return false;
     }
     if (!move_hand("open", "release_gripper")) {
@@ -108,7 +108,7 @@ public:
       RCLCPP_ERROR(node_->get_logger(), "Failed to detach allowlisted object '%s'", object_id.c_str());
       return false;
     }
-    if (!move_arm(target[0], target[1], target[2] + 0.18, "place_retreat")) {
+    if (!move_arm(target[0], target[1], target[2] + 0.28, "place_retreat")) {
       return false;
     }
     RCLCPP_INFO(

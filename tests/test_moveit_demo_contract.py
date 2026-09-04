@@ -89,11 +89,13 @@ class MoveItDemoContractTest(unittest.TestCase):
         self.assertIn("PlanningSceneInterface", source)
         self.assertIn("kVelocityScale = 0.20", source)
         self.assertIn("kAccelerationScale = 0.20", source)
+        self.assertIn("kExecutionDeadlineSeconds = 120.0", source)
         self.assertIn('"blue_target"', source)
         self.assertIn('"yellow_target"', source)
         self.assertNotIn("create_publisher", source)
         self.assertNotIn("trajectory_msgs", source)
         self.assertNotIn("joint_trajectory", source)
+        self.assertIn("timeout 130", VOICE_DEMO.read_text(encoding="utf-8"))
 
     def test_integrated_demo_revalidates_rgbd_before_moveit(self):
         scene_source = INTEGRATED_SCENE.read_text(encoding="utf-8")

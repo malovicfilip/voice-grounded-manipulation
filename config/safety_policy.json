@@ -27,18 +27,18 @@
   "minimum_object_confidence": 0.75,
   "maximum_scene_age_s": 10.0,
   "maximum_object_drift_m": 0.01,
-  "maximum_execution_time_s": 45.0,
+  "maximum_execution_time_s": 120.0,
   "maximum_velocity_scale": 0.2,
   "maximum_acceleration_scale": 0.2,
   "pick": {
-    "approach_height_m": 0.12,
-    "grasp_height_offset_m": 0.015,
-    "retreat_height_m": 0.16
+    "approach_height_m": 0.2,
+    "grasp_height_offset_m": 0.105,
+    "retreat_height_m": 0.23
   },
   "place": {
-    "approach_height_m": 0.14,
-    "release_height_offset_m": 0.03,
-    "retreat_height_m": 0.18
+    "approach_height_m": 0.25,
+    "release_height_offset_m": 0.13,
+    "retreat_height_m": 0.28
   },
   "forbidden_fields": [
     "joint",

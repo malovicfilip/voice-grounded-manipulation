@@ -72,6 +72,12 @@ class SkillValidator:
         drift = self.policy.get("maximum_object_drift_m")
         if not isinstance(drift, (int, float)) or not 0.0 < drift <= 0.01:
             raise ValueError("maximum object drift must be in (0, 0.01]")
+        execution_time = self.policy.get("maximum_execution_time_s")
+        if (
+            not isinstance(execution_time, (int, float))
+            or not 0.0 < execution_time <= 120.0
+        ):
+            raise ValueError("maximum execution time must be in (0, 120]")
 
     def validate(
         self,

@@ -246,7 +246,7 @@ print(skill["object_id"])
 print(skill["target_id"])
 print(positions[0][0])
 print(positions[0][1])
-print(positions[0][2] - 0.12)
+print(positions[0][2] - 0.20)
 PY
 )
 if [[ "${#EXECUTION_ARGUMENTS[@]}" -ne 6 ]]; then
@@ -254,7 +254,7 @@ if [[ "${#EXECUTION_ARGUMENTS[@]}" -ne 6 ]]; then
   exit 1
 fi
 
-run_ros timeout 55 ros2 launch vgm_moveit_demo safe_pick_and_place.launch.py \
+run_ros timeout 130 ros2 launch vgm_moveit_demo safe_pick_and_place.launch.py \
   request_id:="${EXECUTION_ARGUMENTS[0]}" \
   object_id:="${EXECUTION_ARGUMENTS[1]}" \
   target_id:="${EXECUTION_ARGUMENTS[2]}" \

@@ -69,7 +69,7 @@ class ExecutionSupervisorTest(unittest.TestCase):
         self.assertEqual(supervisor.state, SupervisorState.IDLE)
 
     def test_timeout_cancels_before_next_primitive(self):
-        ticks = iter((0.0, 0.0, 50.0))
+        ticks = iter((0.0, 0.0, 125.0))
         supervisor = ExecutionSupervisor(clock=lambda: next(ticks))
         backend = FakeBackend()
         result = supervisor.execute(self.plan(), backend)
