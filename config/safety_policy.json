@@ -26,6 +26,7 @@
   },
   "minimum_object_confidence": 0.75,
   "maximum_scene_age_s": 10.0,
+  "maximum_object_drift_m": 0.01,
   "maximum_execution_time_s": 45.0,
   "maximum_velocity_scale": 0.2,
   "maximum_acceleration_scale": 0.2,

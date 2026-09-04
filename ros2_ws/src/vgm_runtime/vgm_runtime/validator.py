@@ -69,6 +69,9 @@ class SkillValidator:
             raise ValueError("velocity scale may not exceed 0.2")
         if self.policy["maximum_acceleration_scale"] > 0.2:
             raise ValueError("acceleration scale may not exceed 0.2")
+        drift = self.policy.get("maximum_object_drift_m")
+        if not isinstance(drift, (int, float)) or not 0.0 < drift <= 0.01:
+            raise ValueError("maximum object drift must be in (0, 0.01]")
 
     def validate(
         self,

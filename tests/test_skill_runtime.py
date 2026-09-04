@@ -309,6 +309,31 @@ class CoordinatorAndPipelineTest(unittest.TestCase):
             gated["validated_skill"]["validated_at_s"], NOW + 0.5
         )
 
+    def test_execution_gate_rejects_commanded_object_drift(self):
+        scene = grounded_scene()
+        validator = SkillValidator(clock=lambda: NOW)
+        accepted = validator.validate(
+            proposal(
+                "pick_and_place",
+                object_id="red_cube",
+                target_id="blue_target",
+                scene_revision=REVISION,
+            ),
+            scene,
+        )
+        initial_plan = TaskCoordinator(validator.policy).create_plan(accepted, scene)
+        decision = {
+            "accepted": True,
+            "validated_skill": accepted.to_mapping(),
+            "plan": plan_to_mapping(initial_plan),
+        }
+        moved = grounded_scene(x=-0.08)
+        with self.assertRaises(SkillValidationError) as raised:
+            gate_decision(
+                decision, moved, SkillValidator(clock=lambda: NOW + 0.5)
+            )
+        self.assertEqual(raised.exception.code, "object_moved")
+
 
 if __name__ == "__main__":
     unittest.main()

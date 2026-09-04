@@ -204,11 +204,11 @@ class ColorDepthGrounder:
         revision_payload = [
             {
                 "object_id": object_id,
-                # Five-millimeter bins keep a static scene revision stable
+                # One-centimeter bins keep a static scene revision stable
                 # across measured 1-2 mm RGB-D jitter. Confidence is enforced
                 # separately and must not make an unchanged geometry stale.
-                "position_bin_5mm": [
-                    int(round(value / 0.005))
+                "position_bin_1cm": [
+                    int(round(value / 0.01))
                     for value in observations[object_id].position_m
                 ],
             }

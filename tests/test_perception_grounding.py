@@ -122,7 +122,7 @@ class PerceptionGroundingTest(unittest.TestCase):
 
         baseline = revision_with_x_offset(0.0)
         self.assertEqual(baseline, revision_with_x_offset(0.001))
-        self.assertNotEqual(baseline, revision_with_x_offset(0.01))
+        self.assertNotEqual(baseline, revision_with_x_offset(0.02))
 
 
 if __name__ == "__main__":
