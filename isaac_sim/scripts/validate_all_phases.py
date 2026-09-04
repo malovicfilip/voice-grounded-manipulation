@@ -6,7 +6,6 @@ cost guard. This script neither starts cloud compute nor transfers API keys.
 """
 
 import argparse
-from dataclasses import replace
 import json
 from pathlib import Path
 import sys
@@ -21,7 +20,6 @@ from vgm_runtime.openai_intent import load_local_api_key
 from vgm_runtime.ssh_backend import SSHBackend
 from vgm_runtime.task_cli import upload_and_transcribe
 from vgm_runtime.tasks import OpenAITaskModel, TaskSession
-from vgm_runtime.validator import SkillValidator
 
 
 def proposal(scene):
@@ -45,6 +43,12 @@ def boundary(backend):
         "missing_grounding": {**proposal(scene), "object_id": "invisible_cube"},
         "unknown_target": {**proposal(scene), "target_id": "outside_table"},
     }
+    expected_refusals = {
+        "direct_control": "direct-control fields are forbidden",
+        "unknown_skill": "skill is not allowlisted",
+        "missing_grounding": "object is not grounded",
+        "unknown_target": "target is not allowlisted",
+    }
     for name, value in fixtures.items():
         # Renew only the fixture revision; every rejection traverses the live
         # remote validator and must fail before it launches a MoveIt executor.
@@ -53,6 +57,8 @@ def boundary(backend):
         try:
             backend.execute(value, latest)
         except RuntimeError as error:
+            require(expected_refusals[name] in str(error),
+                    f"{name} failed for an unrelated reason: {error}")
             rejected.append({"fixture": name, "refusal": str(error)})
         else:
             raise AssertionError(f"invalid request was accepted: {name}")
@@ -109,7 +115,8 @@ def fault(backend):
     value = proposal(scene)
     try:
         backend.request("fault_test", proposal=value,
-                        baseline={"object_position": list(scene.objects["red_cube"].position_m)})
+                        baseline={"scene": scene.to_mapping(),
+                                  "object_position": list(scene.objects["red_cube"].position_m)})
     except RuntimeError as error:
         refusal = str(error)
     else:
@@ -127,6 +134,7 @@ def fault(backend):
     else:
         raise AssertionError("faulted session accepted motion without recovery")
     recovery = backend.recover()
+    require(recovery["status"] == "recovered", "explicit fault recovery failed")
     return {"refusal": refusal, "events": events["events"], "robot": state, "recovery": recovery}
 
 
@@ -151,10 +159,20 @@ def task(backend, audit, transcript, provider="openai"):
     session = TaskSession(model, backend, audit)
     pending = session.prepare(transcript)
     require(pending["status"] == "awaiting_confirmation", f"task was not confirmable: {pending}")
+    expected = (["inspect", "pick", "place", "inspect"]
+                if transcript.startswith("Inspect the red cube. Then pick") else ["pick_and_place"])
+    require([step["skill"] for step in pending["steps"]] == expected,
+            "model proposal does not match the acceptance skill sequence")
     # Running this acceptance script authorizes its explicit, fixed test tasks.
     result = session.confirm(pending["confirmation"])
     require(result["status"] == "completed", f"task failed: {result}")
-    return {"transcript": transcript, "proposal": pending, "execution": result}
+    require([step["skill"] for step in result["completed_steps"]] == expected,
+            "completed skills do not match the confirmed sequence")
+    final_state = backend.request("robot_state")
+    require(final_state["stationary"] and final_state["held_object_id"] is None,
+            "task did not finish stationary and empty-handed")
+    return {"transcript": transcript, "proposal": pending, "execution": result,
+            "final_robot_state": final_state}
 
 
 def dialogue(backend, audit):

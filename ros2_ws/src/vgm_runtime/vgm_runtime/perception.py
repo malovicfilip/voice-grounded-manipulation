@@ -198,11 +198,14 @@ class ColorDepthGrounder:
                     + 0.35 * location_score
                 )
                 candidates.append(
-                    (location_error, -rows.size, position, confidence, rows.size)
+                    (-confidence, location_error, -rows.size, position, confidence, rows.size)
                 )
             if not candidates:
                 continue
-            _, _, position, confidence, pixel_count = min(candidates)
+            # Inside the spatial gate, rank measured RGB/depth/pixel support
+            # together with location. Nearest-only ranking can pick a tiny
+            # reflection over the real cube for a submillimeter distance gain.
+            _, _, _, position, confidence, pixel_count = min(candidates)
             observations[object_id] = ObjectObservation(
                 object_id=object_id,
                 position_m=position,

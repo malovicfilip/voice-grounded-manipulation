@@ -221,10 +221,12 @@ class SimulatorSession:
                     hints[proposal["object_id"]] = [target[0], target[1], target[2] + 0.025]
                     time.sleep(0.6)
                     final_scene = self.capture(hints)
+                    # Preserve refused outcomes too; failure evidence must not
+                    # disappear merely because the confidence/error gate fails.
+                    write_json(work / "final_scene.json", final_scene.to_mapping())
                     result["outcome"] = validate_placement_outcome({"validated_skill": proposal}, final_scene, self.policy)
                     state["expected_positions"] = hints
                     write_json(self.directory / "session_state.json", state)
-                    write_json(work / "final_scene.json", final_scene.to_mapping())
                 write_json(work / "result.json", result)
                 return result
             except BaseException:

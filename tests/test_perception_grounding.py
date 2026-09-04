@@ -124,6 +124,24 @@ class PerceptionGroundingTest(unittest.TestCase):
         self.assertEqual(baseline, revision_with_x_offset(0.001))
         self.assertNotEqual(baseline, revision_with_x_offset(0.02))
 
+    def test_small_nearer_color_fragment_cannot_displace_supported_cube(self):
+        rgb = np.zeros((40, 40, 3), dtype=np.uint8)
+        rgb[17:19, 17:19] = np.array([130, 40, 40], dtype=np.uint8)
+        rgb[22:28, 22:28] = np.array([204, 13, 13], dtype=np.uint8)
+        depth = np.full((40, 40), np.nan, dtype=np.float32)
+        depth[17:19, 17:19] = 1.0
+        depth[22:28, 22:28] = 1.0
+        transform = np.eye(4)
+        transform[0, 3], transform[1, 3] = -.1, -.18
+        scene = ColorDepthGrounder(self.config, minimum_pixels=4).ground(
+            rgb, depth, CameraIntrinsics(1000.0, 1000.0, 17.5, 17.5),
+            transform, captured_at_s=1.0,
+        )
+        observation = scene.objects["red_cube"]
+        self.assertEqual(observation.pixel_count, 36)
+        self.assertGreater(observation.confidence, .95)
+        self.assertAlmostEqual(observation.position_m[0], -.093)
+
     def test_expected_position_can_ground_a_relocated_object(self):
         red = np.array([204, 13, 13], dtype=np.uint8)
         rgb = np.zeros((30, 30, 3), dtype=np.uint8)
