@@ -37,7 +37,7 @@
   },
   "place": {
     "approach_height_m": 0.25,
-    "release_height_offset_m": 0.13,
+    "release_height_offset_m": 0.14,
     "retreat_height_m": 0.28
   },
   "forbidden_fields": [

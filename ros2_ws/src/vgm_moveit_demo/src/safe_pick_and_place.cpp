@@ -98,7 +98,7 @@ public:
     if (!move_arm(target[0], target[1], target[2] + 0.25, "place_approach")) {
       return false;
     }
-    if (!move_arm(target[0], target[1], target[2] + 0.13, "place_descend")) {
+    if (!move_arm(target[0], target[1], target[2] + 0.14, "place_descend")) {
       return false;
     }
     if (!move_hand("open", "release_gripper")) {
