@@ -7,6 +7,7 @@ import json
 import math
 import time
 from dataclasses import dataclass
+from collections.abc import Mapping
 from typing import Any
 
 import numpy as np
@@ -95,6 +96,7 @@ class ColorDepthGrounder:
         camera_to_world: np.ndarray,
         *,
         captured_at_s: float | None = None,
+        expected_positions: Mapping[str, tuple[float, float, float]] | None = None,
     ) -> GroundedScene:
         """Return observations for colors with sufficient RGB-D support."""
         rgb_array = np.asarray(rgb)
@@ -130,7 +132,16 @@ class ColorDepthGrounder:
                 & finite_depth
             )
             candidates = []
-            expected = self._expected_positions[object_id]
+            expected = (
+                expected_positions.get(object_id, self._expected_positions[object_id])
+                if expected_positions is not None
+                else self._expected_positions[object_id]
+            )
+            if len(expected) != 3 or not all(
+                isinstance(value, (int, float)) and math.isfinite(value)
+                for value in expected
+            ):
+                raise ValueError("expected object positions must be finite XYZ values")
             for rows, columns in _connected_components(mask):
                 if rows.size < self.minimum_pixels:
                     continue
