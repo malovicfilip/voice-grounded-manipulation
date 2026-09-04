@@ -1,3 +1,4 @@
+import os
 from glob import glob
 from pathlib import Path
 
@@ -6,6 +7,12 @@ from setuptools import find_packages, setup
 
 PACKAGE_NAME = "vgm_runtime"
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
+PACKAGE_DIRECTORY = Path(__file__).resolve().parent
+
+
+def relative_source(path: Path) -> str:
+    """Return a setuptools-compatible path relative to this setup.py."""
+    return os.path.relpath(path, PACKAGE_DIRECTORY)
 
 
 setup(
@@ -19,9 +26,11 @@ setup(
         (
             f"share/{PACKAGE_NAME}/config",
             [
-                str(REPOSITORY_ROOT / "config" / "robot_skill.schema.json"),
-                str(REPOSITORY_ROOT / "config" / "safety_policy.json"),
-                str(REPOSITORY_ROOT / "config" / "phase_1_scene.json"),
+                relative_source(
+                    REPOSITORY_ROOT / "config" / "robot_skill.schema.json"
+                ),
+                relative_source(REPOSITORY_ROOT / "config" / "safety_policy.json"),
+                relative_source(REPOSITORY_ROOT / "config" / "phase_1_scene.json"),
             ],
         ),
     ],
