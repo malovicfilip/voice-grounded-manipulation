@@ -254,6 +254,19 @@ if [[ "${#EXECUTION_ARGUMENTS[@]}" -ne 6 ]]; then
   exit 1
 fi
 
+python3 - "${HOST_OUTPUT}/expected_outcome.json" \
+  "${EXECUTION_ARGUMENTS[1]}" "${EXECUTION_ARGUMENTS[2]}" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+path, object_id, target_id = sys.argv[1:]
+Path(path).write_text(
+    json.dumps({"object_id": object_id, "target_id": target_id}, indent=2) + "\n",
+    encoding="utf-8",
+)
+PY
+
 run_ros timeout 130 ros2 launch vgm_moveit_demo safe_pick_and_place.launch.py \
   request_id:="${EXECUTION_ARGUMENTS[0]}" \
   object_id:="${EXECUTION_ARGUMENTS[1]}" \
@@ -277,6 +290,11 @@ if [[ ! -s "${HOST_OUTPUT}/final.png" || \
   echo 'Isaac Sim did not produce the final RGB-D evidence.' >&2
   exit 1
 fi
+
+run_ros ros2 run vgm_runtime validate_outcome \
+  --execution-plan "${HOST_OUTPUT}/execution_plan.json" \
+  --final-scene "${HOST_OUTPUT}/final_grounded_scene.json" \
+  --output-json "${HOST_OUTPUT}/outcome_validation.json"
 
 python3 - "${HOST_OUTPUT}/manifest.json" "${RUN_ID}" "${PROVIDER}" <<'PY'
 import json

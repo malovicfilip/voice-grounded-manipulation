@@ -78,6 +78,12 @@ class SkillValidator:
             or not 0.0 < execution_time <= 120.0
         ):
             raise ValueError("maximum execution time must be in (0, 120]")
+        placement_error = self.policy.get("maximum_placement_error_m")
+        if (
+            not isinstance(placement_error, (int, float))
+            or not 0.0 < placement_error <= 0.06
+        ):
+            raise ValueError("maximum placement error must be in (0, 0.06]")
 
     def validate(
         self,

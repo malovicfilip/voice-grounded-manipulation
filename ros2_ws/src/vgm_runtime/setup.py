@@ -44,6 +44,7 @@ setup(
         "console_scripts": [
             "intent_cli = vgm_runtime.cli:main",
             "execution_gate = vgm_runtime.gate_cli:main",
+            "validate_outcome = vgm_runtime.outcome_cli:main",
             "skill_gateway = vgm_runtime.ros_gateway:main",
             "voice_cli = vgm_runtime.voice_cli:main",
         ]

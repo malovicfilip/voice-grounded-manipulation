@@ -145,6 +145,7 @@ def _capture_rgbd(
     grounder: ColorDepthGrounder,
     intrinsics: CameraIntrinsics,
     camera_to_world: np.ndarray,
+    expected_positions=None,
 ) -> None:
     import matplotlib.pyplot as plt
 
@@ -155,6 +156,7 @@ def _capture_rgbd(
         intrinsics,
         camera_to_world,
         captured_at_s=captured_at_s,
+        expected_positions=expected_positions,
     )
     plt.imsave(output_directory / f"{prefix}.png", rgb)
     np.save(output_directory / f"{prefix}_depth_m.npy", depth_m)
@@ -253,9 +255,34 @@ def main() -> int:
         if initial_captured and final_request.exists():
             final_settle_frames += 1
             if final_settle_frames >= 30 and rgb is not None and depth is not None:
+                outcome = json.loads(
+                    (output_directory / "expected_outcome.json").read_text(
+                        encoding="utf-8"
+                    )
+                )
+                if set(outcome) != {"object_id", "target_id"}:
+                    raise ValueError("expected outcome fields are invalid")
+                cube = next(
+                    item
+                    for item in config["cubes"]
+                    if item["object_id"] == outcome["object_id"]
+                )
+                target = next(
+                    item
+                    for item in config["targets"]
+                    if item["target_id"] == outcome["target_id"]
+                )
+                expected_positions = {
+                    cube["object_id"]: (
+                        float(target["position"][0]),
+                        float(target["position"][1]),
+                        float(config["table"]["surface_height_m"])
+                        + float(cube["size_m"]) / 2.0,
+                    )
+                }
                 _capture_rgbd(
                     "final", rgb, depth, output_directory, grounder,
-                    intrinsics, camera_to_world,
+                    intrinsics, camera_to_world, expected_positions,
                 )
                 break
 

@@ -113,6 +113,7 @@ class MoveItDemoContractTest(unittest.TestCase):
         self.assertIn('get_data("distance_to_image_plane")', scene_source)
         self.assertIn("capture_verification.request", scene_source)
         self.assertIn("execution_gate", launcher_source)
+        self.assertIn("validate_outcome", launcher_source)
         self.assertLess(
             launcher_source.index("execution_gate"),
             launcher_source.index("safe_pick_and_place.launch.py"),
