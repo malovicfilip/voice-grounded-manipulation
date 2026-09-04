@@ -161,6 +161,102 @@ On a headless VM without a credential vault, GitHub CLI stores its token in
 or transferring the VM, run `gh auth logout --hostname github.com` and revoke
 the temporary authorization in GitHub account settings.
 
+## Isaac Sim 6.0.1 container
+
+The remote/headless deployment uses NVIDIA's official container:
+
+```bash
+docker pull nvcr.io/nvidia/isaac-sim:6.0.1
+docker image inspect nvcr.io/nvidia/isaac-sim:6.0.1 \
+  --format '{{.Id}} {{.Architecture}}'
+```
+
+`docker pull` downloads the versioned image without installing Isaac Sim into
+the host OS. `docker image inspect` verifies the local content address and CPU
+architecture. The image verified on this instance is `amd64` with image ID:
+
+```text
+sha256:783444c706538aa76cf5126e911ddc5e618779e6105305ad4af4260362a30aa9
+```
+
+The Brev base image originally included the NVIDIA compute stack but not the
+matching Vulkan/OpenGL userspace package. Install only the package matching the
+existing 595.71.05 server driver, then refresh both CDI specification paths:
+
+```bash
+sudo apt-get install -y libnvidia-gl-595-server
+sudo systemctl restart nvidia-cdi-refresh.service
+sudo nvidia-ctk cdi generate --output=/var/run/cdi/nvidia.yaml
+```
+
+The first command adds NVIDIA's graphics libraries without upgrading or
+replacing the installed driver. Brev's custom refresh service regenerates
+`/etc/cdi/nvidia.yaml` and restarts Docker. The final command refreshes the
+standard runtime CDI file too; otherwise Docker can resolve the stale duplicate
+in `/var/run/cdi` and omit the graphics libraries from containers.
+
+Create persistent cache and state directories owned by Isaac Sim's rootless
+container user. The final directory holds generated, git-ignored scene output:
+
+```bash
+sudo install -d -o 1234 -g 1234 \
+  /home/ubuntu/docker/isaac-sim/cache/main \
+  /home/ubuntu/docker/isaac-sim/cache/computecache \
+  /home/ubuntu/docker/isaac-sim/config \
+  /home/ubuntu/docker/isaac-sim/data \
+  /home/ubuntu/docker/isaac-sim/logs \
+  /home/ubuntu/docker/isaac-sim/pkg \
+  /home/ubuntu/.cache/ov/hub \
+  /home/ubuntu/workspace/isaac_sim/_output
+```
+
+`install -d` creates missing directories and assigns numeric UID/GID 1234 in a
+single operation. Verify Vulkan, the L4, and the remaining requirements with
+NVIDIA's bundled checker:
+
+```bash
+docker run --name isaac-sim-compat-6-0-1 \
+  --entrypoint bash --gpus all --rm --network=host \
+  -e ACCEPT_EULA=Y \
+  nvcr.io/nvidia/isaac-sim:6.0.1 \
+  ./isaac-sim.compatibility_check.sh --/app/quitAfter=10 --no-window
+```
+
+`--gpus all` supplies the L4, `--rm` removes the temporary container, and
+`--no-window` runs headlessly. `--network=host` follows NVIDIA's checker and
+cloud-container guidance; it does not publish a Docker port. Use
+`ACCEPT_EULA=Y` only after accepting NVIDIA's license. Privacy telemetry remains
+opted out because `PRIVACY_CONSENT` is deliberately unset. The verified result
+on this instance is `System checking result: PASSED` with NVIDIA L4, Vulkan,
+driver 595.71.05, and 24.15 GB VRAM.
+
+Build the repository's Phase 1 scene without publishing ports:
+
+```bash
+docker run --name vgm-phase1-build --rm --gpus all \
+  -e ACCEPT_EULA=Y -e PYTHONUNBUFFERED=1 -u 1234:1234 \
+  -v /home/ubuntu/docker/isaac-sim/cache/main:/isaac-sim/.cache:rw \
+  -v /home/ubuntu/docker/isaac-sim/cache/computecache:/isaac-sim/.nv/ComputeCache:rw \
+  -v /home/ubuntu/docker/isaac-sim/logs:/isaac-sim/.nvidia-omniverse/logs:rw \
+  -v /home/ubuntu/docker/isaac-sim/config:/isaac-sim/.nvidia-omniverse/config:rw \
+  -v /home/ubuntu/docker/isaac-sim/data:/isaac-sim/.local/share/ov/data:rw \
+  -v /home/ubuntu/docker/isaac-sim/pkg:/isaac-sim/.local/share/ov/pkg:rw \
+  -v /home/ubuntu/.cache/ov/hub:/var/cache/hub:rw \
+  -v /home/ubuntu/workspace:/workspace:ro \
+  -v /home/ubuntu/workspace/isaac_sim/_output:/workspace/isaac_sim/_output:rw \
+  -w /workspace --entrypoint /isaac-sim/python.sh \
+  nvcr.io/nvidia/isaac-sim:6.0.1 -u \
+  /workspace/isaac_sim/scripts/build_phase_1_scene.py --headless
+```
+
+The repository is mounted read-only while its ignored output subdirectory is a
+separate writable mount. The builder has been verified to produce
+`isaac_sim/_output/phase_1_scene.usd` containing the Franka asset reference, six
+unique cubes, and an RGB-D camera with `OmniSensorAPI`. No WebRTC or other
+public application ports have been opened. See NVIDIA's
+[container installation guide](https://docs.isaacsim.omniverse.nvidia.com/6.0.1/installation/install_container.html)
+and [RTX camera API](https://docs.isaacsim.omniverse.nvidia.com/6.0.1/py/source/extensions/isaacsim.sensors.experimental.rtx/docs/index.html).
+
 ## Session shutdown
 
 Commit and push all work, stop the instance, and verify its state:

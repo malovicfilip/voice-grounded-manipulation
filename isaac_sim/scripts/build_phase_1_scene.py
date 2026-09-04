@@ -239,7 +239,14 @@ def _create_camera(stage, config):
     from pxr import Gf, Sdf, UsdGeom
 
     camera_config = config['camera']
-    camera = UsdGeom.Camera.Define(stage, camera_config['prim_path'])
+    rtx_camera = RtxCamera(
+        camera_config['prim_path'],
+        tick_rate=float(config['physics']['render_hz']),
+        reset_xform_op_properties=False,
+    )
+    camera = UsdGeom.Camera(
+        stage.GetPrimAtPath(camera_config['prim_path'])
+    )
     transform = transform_utils.look_at_matrix(
         eye=camera_config['position'],
         target=camera_config['look_at'],
@@ -257,11 +264,6 @@ def _create_camera(stage, config):
         'vgm:frameId', Sdf.ValueTypeNames.String
     ).Set(camera_config['frame_id'])
 
-    rtx_camera = RtxCamera(
-        camera_config['prim_path'],
-        tick_rate=float(config['physics']['render_hz']),
-        reset_xform_op_properties=False,
-    )
     width, height = camera_config['resolution']
     sensor = CameraSensor(
         rtx_camera,
@@ -271,11 +273,12 @@ def _create_camera(stage, config):
     return sensor
 
 
-def _build_scene(config, output_path, headless):
+def _build_scene(config, output_path, headless, summary):
     """Launch Isaac Sim, author the scene, and save the resulting USD."""
     from isaacsim import SimulationApp
 
     simulation_app = SimulationApp({'headless': headless})
+    exit_code = 0
     try:
         import isaacsim.core.experimental.utils.stage as stage_utils
         from isaacsim.storage.native import get_assets_root_path
@@ -304,9 +307,17 @@ def _build_scene(config, output_path, headless):
         if not stage_utils.save_stage(str(output_path)):
             raise RuntimeError(f'failed to save scene to {output_path}')
 
+        summary.update({'output': str(output_path), 'status': 'built'})
+        print(json.dumps(summary, sort_keys=True), flush=True)
         return camera_sensor
+    except BaseException:
+        import traceback
+
+        traceback.print_exc()
+        exit_code = 1
+        raise
     finally:
-        simulation_app.close()
+        simulation_app.close(skip_cleanup=True, exit_code=exit_code)
 
 
 def _parse_args():
@@ -339,12 +350,9 @@ def main():
         output_path = args.output.resolve()
         if output_path.suffix.lower() not in {'.usd', '.usda', '.usdc'}:
             raise ValueError('output must use .usd, .usda, or .usdc')
-        _build_scene(config, output_path, args.headless)
+        _build_scene(config, output_path, args.headless, summary)
     except (KeyError, OSError, TypeError, ValueError) as error:
         parser.error(str(error))
-
-    summary.update({'output': str(output_path), 'status': 'built'})
-    print(json.dumps(summary, sort_keys=True))
 
 
 if __name__ == '__main__':

@@ -56,5 +56,7 @@ and the ROS development tools. The official publisher/subscriber demo and the
 empty `ros2_ws` baseline build have passed. The versioned Phase 1 scene contract
 and its builder pass all simulator-independent tests. A stoppable NVIDIA Brev
 GPU environment has been verified with an NVIDIA L4, 8 CPUs, 32 GiB system RAM,
-and persistent project storage under `/home/ubuntu/workspace`. Isaac Sim 6.0.1,
-MoveIt 2, and application packages have not been installed yet.
+and persistent project storage under `/home/ubuntu/workspace`. The official
+Isaac Sim 6.0.1 container passes NVIDIA's compatibility checker on that GPU, and
+the Phase 1 Franka/RGB-D scene builds successfully in headless mode. MoveIt 2
+and application packages have not been installed yet.

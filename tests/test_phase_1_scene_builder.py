@@ -74,6 +74,22 @@ class Phase1SceneBuilderTest(unittest.TestCase):
         for fragment in forbidden_call_fragments:
             self.assertNotIn(fragment, source)
 
+    def test_builder_preserves_errors_during_isaac_shutdown(self):
+        """Keep Python failures visible with a nonzero process status."""
+        source = BUILDER_PATH.read_text(encoding='utf-8')
+        self.assertIn('traceback.print_exc()', source)
+        self.assertIn('close(skip_cleanup=True, exit_code=exit_code)', source)
+
+    def test_rtx_camera_authors_required_sensor_schema(self):
+        """Let RtxCamera create the prim and apply OmniSensorAPI."""
+        source = BUILDER_PATH.read_text(encoding='utf-8')
+        camera_source = source.split('def _create_camera', maxsplit=1)[1]
+        camera_source = camera_source.split('def _build_scene', maxsplit=1)[0]
+        self.assertLess(
+            camera_source.index('rtx_camera = RtxCamera('),
+            camera_source.index('camera = UsdGeom.Camera('),
+        )
+
 
 if __name__ == '__main__':
     unittest.main()
