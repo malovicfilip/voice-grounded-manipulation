@@ -96,6 +96,14 @@ class MoveItDemoContractTest(unittest.TestCase):
         self.assertNotIn("trajectory_msgs", source)
         self.assertNotIn("joint_trajectory", source)
         self.assertIn("timeout 130", VOICE_DEMO.read_text(encoding="utf-8"))
+        self.assertLess(
+            source.index("arm_.detachObject(object_id)"),
+            source.index("CollisionObject::REMOVE"),
+        )
+        self.assertLess(
+            source.index("CollisionObject::REMOVE"),
+            source.index('"place_retreat"'),
+        )
 
     def test_integrated_demo_revalidates_rgbd_before_moveit(self):
         scene_source = INTEGRATED_SCENE.read_text(encoding="utf-8")

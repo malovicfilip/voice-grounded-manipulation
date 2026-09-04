@@ -108,6 +108,17 @@ public:
       RCLCPP_ERROR(node_->get_logger(), "Failed to detach allowlisted object '%s'", object_id.c_str());
       return false;
     }
+    moveit_msgs::msg::CollisionObject released_object;
+    released_object.header.frame_id = "world";
+    released_object.id = object_id;
+    released_object.operation = moveit_msgs::msg::CollisionObject::REMOVE;
+    if (!planning_scene_.applyCollisionObject(released_object)) {
+      RCLCPP_ERROR(
+        node_->get_logger(), "Failed to remove released object '%s' from the planning scene",
+        object_id.c_str());
+      return false;
+    }
+    RCLCPP_INFO(node_->get_logger(), "VGM_PRIMITIVE_COMPLETE kind=detach_object");
     if (!move_arm(target[0], target[1], target[2] + 0.28, "place_retreat")) {
       return false;
     }
