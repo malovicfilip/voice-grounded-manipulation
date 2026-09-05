@@ -3,6 +3,7 @@
 
 import argparse
 import json
+import os
 from pathlib import Path
 import re
 import selectors
@@ -34,19 +35,24 @@ def main():
         process = subprocess.Popen([sys.executable, "-u", str(ROOT / "isaac_sim/scripts/validate_all_phases.py"),
                                     "--session", args.session, "--audio", str(args.audio.resolve()),
                                     "--output", str(output / "acceptance.json")],
-                                   stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+                                   stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         selector = selectors.DefaultSelector()
         selector.register(process.stdout, selectors.EVENT_READ)
+        pending = b""
         while True:
             if time.monotonic() - started > 1140:
                 raise TimeoutError("recorded campaign exceeded 19 minutes")
             if not selector.select(timeout=1):
                 continue
-            line = process.stdout.readline()
-            if not line:
+            chunk = os.read(process.stdout.fileno(), 65536)
+            if not chunk:
                 break
-            events.append({"elapsed_s": time.monotonic() - started, "text": line.rstrip()})
-            print(line, end="", flush=True)
+            pending += chunk
+            while b"\n" in pending:
+                line, pending = pending.split(b"\n", 1)
+                text = line.decode("utf-8", errors="replace")
+                events.append({"elapsed_s": time.monotonic() - started, "text": text})
+                print(text, flush=True)
         process.wait(timeout=10)
     finally:
         if process is not None and process.poll() is None:
