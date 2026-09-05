@@ -57,7 +57,7 @@ For each test, record the scene/configuration version, command or input fixture,
 
 ## Current verified evidence
 
-The repository's 59 simulator-independent tests pass. They cover the scene and
+The repository's 94 simulator-independent tests pass. They cover the scene and
 RGB-D contracts, exact skill shapes, malformed/extra fields, recursive
 direct-control-field rejection, ambiguity, missing/stale/low-confidence
 grounding, workspace and target policy, replay protection, scene revalidation,
@@ -92,18 +92,22 @@ the Brev NVIDIA L4 instance using Isaac Sim 6.0.1 and ROS 2 Jazzy:
   output, no tools, no coordinates, and `store: false`. The validator expanded
   it to 11 deterministic primitives.
 
-The deterministic rules provider used for the physical integration run is a
-repeatable intent-test fixture, not a substitute for the LLM. The combined
-audio-to-LLM-to-simulator run requires an API key on the temporary GPU instance;
-credentials are not transferred there without explicit authorization.
+The original deterministic integration run is supplemented by the new
+workstation task console. Its real Whisper → OpenAI → Isaac/MoveIt execution
+has passed, with the API key remaining in WSL. Only transcripts and identifiers
+go to OpenAI; audio is transcribed on Brev. See the
+[all-phase acceptance record](all_phases_validation.md).
 
 ## Acceptance status
 
-Criteria 1–4 and 6–11 have passing automated and/or live-simulator evidence.
-The software execution supervisor also has passing tests showing that stop,
-backend faults, and deadline expiration call cancellation and prevent following
-primitives. Before final Phase 1 safety sign-off, criterion 5 should additionally
-be exercised as a live mid-motion stop/fault injection against the running
-Isaac/MoveIt stack, with before/after robot state and logs retained. Until that
-test is captured, the integrated manipulation demo is accepted, but the broader
-Phase 1 safety campaign remains open.
+All eleven criteria now have passing automated and/or live-simulator evidence.
+The live stop fixture observed 0.1754 rad of arm motion before cancellation,
+recorded `VGM_EXECUTION_STOP reason=operator_stop`, and verified that no pickup
+descent followed. Settled joint drift was 0.0 rad over the measured final window.
+A separate live inhibit-only backend fault prevented pickup approach, latched
+the session against further execution, and required explicit recovery. Recovery
+confirmed stationary joints and no held object and performed no motion.
+
+Phase 1 is accepted for this configured simulation. These tests do not establish
+hardware safety certification or behavior outside the documented scene and
+execution constraints.

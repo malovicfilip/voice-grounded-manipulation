@@ -451,34 +451,23 @@ The launcher performs these gates in order:
 7. Capture final RGB-D evidence and reject success unless the placed object is
    confidently observed within 6 cm of the allowlisted target.
 
-Use the constrained LLM path only when `OPENAI_API_KEY` is available as an
-environment variable or in the ignored `/home/ubuntu/workspace/.env.local`:
+For the real LLM and voice path, first open a reusable simulator session as
+described in [the operator runbook](all_phases_validation.md#run-the-campaign).
+Then run the console **in WSL**, where the ignored local API credential stays:
 
 ```bash
-ACCEPT_EULA=Y isaac_sim/scripts/run_voice_manipulation_demo.sh \
-  --transcript "Pick the red cube and place it on the blue target" \
-  --provider openai
+PYTHONPATH=ros2_ws/src/vgm_runtime python3 -m vgm_runtime.task_cli \
+  --session my-session --audio /tmp/vgm-spoken-command.wav
 ```
 
-The OpenAI adapter uses strict JSON-schema output from `gpt-5.6-terra`, offers
-no tools, requests no model-generated coordinates, disables response storage,
-and passes the proposal through the same deterministic gates. Do not copy an API
-key to the temporary instance or commit `.env.local` without the credential
-owner's explicit authorization.
-
-For a spoken command, provide exactly one local audio file instead of a
-transcript:
-
-```bash
-ACCEPT_EULA=Y isaac_sim/scripts/run_voice_manipulation_demo.sh \
-  --audio /tmp/vgm-spoken-command.wav
-```
-
-Audio mode uses the pinned local `faster-whisper` `small.en` model (CPU/int8)
-and then the constrained OpenAI provider. Empty or low-confidence transcripts
-fail before intent extraction. The first model use may download weights into
-the user's persistent cache. Audio is read locally and is not written to the
-audit log.
+This uploads the supplied WAV over SSH and runs the pinned `faster-whisper`
+`small.en` model on Brev (CPU/int8). Empty or low-confidence transcripts fail
+before intent extraction. The first model use may download weights into the
+persistent cache. The workstation OpenAI adapter uses strict JSON-schema output
+from `gpt-5.6-terra`, offers no tools or coordinates, and disables response
+storage. Only synthetic/user-authorized transcripts and scene identifiers go to
+OpenAI; raw audio does not. The console shows the task and asks for confirmation.
+Never copy the API credential to the temporary instance or commit it.
 
 A successful directory under `isaac_sim/_output/<run-id>/` contains the initial,
 verification, and final grounded scenes; RGB/depth artifacts; decision and
@@ -487,6 +476,22 @@ events; and `manifest.json`. These are generated evidence and remain ignored by
 Git because they can be large or contain user input.
 
 ## Session shutdown
+
+For confirmed voice and multi-step work, prefer the [reusable-session
+console](all_phases_validation.md#operator-console): it keeps the LLM and API key
+in WSL and uses SSH for independently validated skill requests. It also avoids
+repeating Isaac's first-camera startup for every command.
+
+Request session cleanup from WSL before stopping the instance:
+
+```bash
+PYTHONPATH=ros2_ws/src/vgm_runtime python3 -m vgm_runtime.task_cli \
+  --session my-session --operation shutdown
+```
+
+This requests cancellation, writes the exact session's shutdown marker, and
+lets its launcher clean up the Isaac container and MoveIt process group. It
+does not stop Brev compute; the following lifecycle command is still required.
 
 Commit and push all work, stop the instance, and verify its state:
 

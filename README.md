@@ -38,7 +38,7 @@ ambiguous, malformed, or unsafe input fails closed without a motion request.
 - Connect transcription to constrained intent extraction and skill proposals.
 - Add confirmations, clarifications, and audit logs for spoken commands.
 
-### Phase 4 — Task-level autonomy (future work)
+### Phase 4 — Task-level autonomy (implemented; live acceptance in progress)
 
 - Expand the validated skill library for pick, place, inspect, and related tasks.
 - Compose multi-step tasks only through validated skill sequences.
@@ -50,7 +50,7 @@ ambiguous, malformed, or unsafe input fails closed without a motion request.
 - `ros2_ws/` — ROS 2 Jazzy workspace source tree.
 - `config/` — shared configuration files.
 - `docs/` — architecture and validation criteria.
-- `tests/` — automated offline and future simulation acceptance tests.
+- `tests/` — simulator-independent safety and regression tests; the live acceptance runner is in `isaac_sim/scripts/`.
 
 See [`docs/local_development.md`](docs/local_development.md) for the verified
 Ubuntu 24.04 WSL, ROS 2 Jazzy, and workspace setup.
@@ -121,26 +121,53 @@ ACCEPT_EULA=Y isaac_sim/scripts/run_voice_manipulation_demo.sh \
   --provider rules
 ```
 
-Use the product-path intent provider with a locally supplied, ignored
-`OPENAI_API_KEY`:
-
-```bash
-ACCEPT_EULA=Y isaac_sim/scripts/run_voice_manipulation_demo.sh \
-  --transcript "Pick the red cube and place it on the blue target" \
-  --provider openai
-```
-
-For actual audio, replace `--transcript ...` with `--audio /path/to/command.wav`.
-The audio path runs `faster-whisper` (`small.en`, CPU/int8 by default) before the
-same constrained OpenAI intent and validation path. Do not commit `.env.local`,
-API keys, recordings, or generated run artifacts.
+For the real LLM and audio path, use the workstation console below. It keeps
+`OPENAI_API_KEY` in WSL, runs `faster-whisper` (`small.en`, CPU/int8) on Brev,
+and requires confirmation before motion. Do not commit `.env.local`, API keys,
+recordings, or generated run artifacts.
 
 The rules provider is only a deterministic integration-test fixture. It does
 not replace the schema-constrained LLM in the intended system.
 
+## Confirmed voice and multi-step tasks
+
+The workstation console keeps the OpenAI API key in WSL and sends constrained
+skill requests over SSH to the existing Brev instance. Brev independently validates
+each proposal against a fresh RGB-D capture before invoking MoveIt. A reusable
+simulator session supports `inspect`, `pick`, `place`, `pick_and_place`, the
+allowlisted named poses, and gripper skills with holding preconditions.
+
+After checking the Brev shutdown guard and building the project packages,
+start a session on Brev:
+
+```bash
+cd /home/ubuntu/workspace
+ACCEPT_EULA=Y isaac_sim/scripts/run_voice_manipulation_demo.sh \
+  --session --run-id my-session
+```
+
+When it prints `Reusable simulator session ready`, start the console in WSL:
+
+```bash
+PYTHONPATH=ros2_ws/src/vgm_runtime python3 -m vgm_runtime.task_cli \
+  --session my-session
+```
+
+Enter a command such as “Inspect the red cube, pick it up, place it on the blue
+target, then inspect it again.” The console displays the proposed sequence and
+waits for `yes`. Enter `audio /path/to/command.wav` to use Whisper. Ambiguous
+requests ask for clarification. Ctrl+C cancels an executing task; `stop` also
+works from an idle console. `recover` checks robot state and requires a new
+command before anything resumes. A held object requires the separately
+confirmed `recover place blue_target` or `recover place yellow_target` operation.
+
+See [all-phase acceptance and operator instructions](docs/all_phases_validation.md)
+for the complete campaign, per-phase criteria, audit evidence, and limitations.
+
 ## Local verification
 
-The simulator-independent suite uses only checked-in code and configuration:
+The simulator-independent suite needs Python, NumPy, and jsonschema (listed in
+`requirements-test.txt`), but no GPU, ROS installation, API call, or cloud instance:
 
 ```bash
 python3 -m unittest discover -s tests -v
