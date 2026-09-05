@@ -10,6 +10,7 @@ ARG ISAACSIM_HOST
 RUN test -n "$ISAACSIM_HOST" \
     && sed -i "s/signalingServer: [^,]*/signalingServer: '${ISAACSIM_HOST}'/" src/main.ts \
     && sed -i "/signalingServer:/a\\    signalingPort: 49100,\n    mediaServer: '${ISAACSIM_HOST}',\n    mediaPort: 47998,\n    forceWSS: false," src/main.ts \
+    && sed -i 's/width: 1920/width: 1280/; s/height: 1080/height: 720/; s/fps: 60/fps: 30/' src/main.ts \
     && npm install --ignore-scripts \
     && npm run build
 FROM node:22-bookworm-slim

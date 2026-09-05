@@ -1,6 +1,7 @@
 # Interactive Isaac Sim viewing
 
-Preparation is implemented; end-to-end browser streaming is **not verified**.
+The simulator and streaming services are running and the robot session is
+ready; the final displayed browser picture is **awaiting user confirmation**.
 Use the existing integrated scene with `--session --stream-host SERVER_IPV4`.
 This enables `omni.kit.livestream.app` using the installed Isaac Sim 6.0.1
 standalone example. The existing ROS/MoveIt control boundary is unchanged.
@@ -77,8 +78,12 @@ ACCEPT_EULA=Y isaac_sim/scripts/run_voice_manipulation_demo.sh \
 Use a new run ID for each new session. After the initial camera warm-up and
 `Reusable simulator session ready`, open `http://SERVER_IPV4:8210/` in Edge or
 Chrome. Only one streaming client should be connected at once. The current
-session uses `live-view-v1`; HTTP delivery from Windows has been verified,
-but a displayed live picture still requires browser confirmation.
+session uses `live-view-v1`. HTTP delivery from Windows, an established
+client signaling connection, the UDP media socket, and GPU encoder activity
+have been verified. The first browser request exposed a 1080p/720p mismatch;
+the viewer was rebuilt to request 1280 x 720 at 30 fps, matching the simulator.
+Refresh the viewer after this update. A displayed live picture still requires
+browser confirmation. No motion commands were issued during streaming setup.
 
 Run the existing task console in WSL, from the repository root:
 
