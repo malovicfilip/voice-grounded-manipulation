@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Panda — voice command console</title>
+<style>
+:root { color-scheme: dark; font: 17px system-ui; background: #14191f; color: #eef3f7; }
+body { max-width: 900px; margin: 30px auto; padding: 20px; }
+section { background: #202832; padding: 22px; margin: 18px 0; border-radius: 12px; }
+button, textarea { font: inherit; border: 1px solid #66717d; border-radius: 6px; padding: 12px; }
+button { cursor: pointer; margin: 5px 8px 5px 0; }
+button:disabled { opacity: .4; cursor: default; }
+textarea { width: 95%; display: block; margin: 12px 0; }
+.confirm { background: #a7e76e; color: #14210c; }.danger { background: #aa2936; color: white; }
+#status { font-weight: 600; } #error { color: #ffb4b4; white-space: pre-wrap; }
+pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; }
+small { color: #bac6d2; } li { margin: 10px 0; }
+</style>
+<h1>Speak. Review. Confirm.</h1>
+<p id="session">Connecting to the local command bridge…</p>
+<p>Keep the live Isaac Sim viewer open alongside this page. Use this console
+instead of the terminal while it is active.</p>
+<section>
+<h2>1. Give an instruction</h2>
+<button id="record" disabled>Start microphone</button>
+<button id="finish" disabled>Stop recording &amp; review</button>
+<p><small>Up to 15 seconds. Audio goes over SSH to Whisper on Brev. The transcript
+and scene identifiers go to the LLM; the API key stays in WSL.</small></p>
+<label for="text">Or type your instruction:</label>
+<textarea id="text" maxlength="2000" rows="2" placeholder="Pick the blue cube and place it on the yellow target." disabled></textarea>
+<button id="prepare" disabled>Review typed instruction</button>
+</section>
+<section>
+<h2>2. Check before moving</h2>
+<p id="status" role="status">Connecting…</p>
+<p><strong>What was heard:</strong> <span id="transcript">—</span></p>
+<ol id="steps"></ol>
+<p id="message"></p>
+<button id="confirm" class="confirm" disabled>Confirm &amp; execute</button>
+<button id="cancel" disabled>Cancel / record again</button>
+<p><small>No task executes without this confirmation. Confirmation expires after
+two minutes; the robot rechecks the scene before execution.</small></p>
+</section>
+<button id="stop" class="danger" disabled>STOP ROBOT</button>
+<button id="recover" disabled>Reset after stop / fault</button>
+<p><small>Stop is a software request, not a hardware emergency stop. Closing a tab
+does not stop an executing task or Brev billing. If the page disconnects, use
+the terminal stop command.</small></p>
+<p id="error" role="alert"></p>
+<details><summary>Execution details</summary><pre id="details"></pre></details>
+<script src="/app.js"></script>
+</html>

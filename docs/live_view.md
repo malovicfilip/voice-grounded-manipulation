@@ -97,6 +97,11 @@ directly control joints, velocities, motors, or trajectories.
 
 ## Microphone input
 
+For the integrated **record → review → Confirm/Cancel** workflow without manual
+downloads or terminal submission, use the [browser command console](browser_console.md)
+at `http://localhost:8766/`. The file-based option below remains available as a
+fallback.
+
 The viewer does not itself interpret spoken robot commands. A separate,
 local-only microphone page prepares a WAV for the existing task console:
 
