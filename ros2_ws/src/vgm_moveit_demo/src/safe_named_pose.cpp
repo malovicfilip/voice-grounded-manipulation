@@ -1,17 +1,18 @@
 #include <chrono>
+#include "vgm_safety_config.hpp"
 #include <memory>
 #include <set>
+#include <stdexcept>
 #include <string>
 #include <thread>
 
 #include <moveit/move_group_interface/move_group_interface.hpp>
+#include <moveit/planning_scene_interface/planning_scene_interface.hpp>
 #include <rclcpp/rclcpp.hpp>
 
 namespace
 {
-constexpr double kVelocityScale = 0.20;
-constexpr double kAccelerationScale = 0.20;
-const std::set<std::string> kAllowedTargets = { "ready", "extended", "transport" };
+using namespace vgm_safety;
 }  // namespace
 
 int main(int argc, char** argv)
@@ -27,7 +28,8 @@ int main(int argc, char** argv)
   } else {
     target = node->declare_parameter<std::string>("target", target);
   }
-  if (kAllowedTargets.count(target) == 0) {
+  if (kAllowedNamedPoses.count(target) == 0 || !node->has_parameter("safety_policy_digest") ||
+      node->get_parameter("safety_policy_digest").as_string() != kPolicyDigest) {
     RCLCPP_ERROR(
       node->get_logger(),
       "Rejected target '%s'. Allowed high-level targets: ready, extended, transport",
@@ -43,8 +45,12 @@ int main(int argc, char** argv)
   int exit_code = 1;
   try {
     moveit::planning_interface::MoveGroupInterface move_group(node, "panda_arm");
-    move_group.setPlanningTime(8.0);
-    move_group.setNumPlanningAttempts(3);
+    moveit::planning_interface::PlanningSceneInterface planning_scene;
+    if (!planning_scene.getAttachedObjects().empty()) {
+      throw std::runtime_error("Named-pose motion is forbidden while carrying an object");
+    }
+    move_group.setPlanningTime(kPlanningTimeSeconds);
+    move_group.setNumPlanningAttempts(kPlanningAttempts);
     move_group.setMaxVelocityScalingFactor(kVelocityScale);
     move_group.setMaxAccelerationScalingFactor(kAccelerationScale);
     move_group.setStartStateToCurrentState();

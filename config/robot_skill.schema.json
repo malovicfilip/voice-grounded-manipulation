@@ -2,6 +2,249 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://voice-grounded-manipulation.local/schemas/robot-skill-v1.json",
   "title": "Validated high-level robot skill proposal",
+  "allOf": [
+  {
+    "if": {
+      "properties": {
+        "skill": {
+          "const": "move_named_pose"
+        }
+      }
+    },
+    "then": {
+      "properties": {
+        "object_id": {
+          "type": "null"
+        },
+        "target_id": {
+          "type": "null"
+        },
+        "pose_name": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "null"
+        }
+      }
+    }
+  },
+  {
+    "if": {
+      "properties": {
+        "skill": {
+          "const": "open_gripper"
+        }
+      }
+    },
+    "then": {
+      "properties": {
+        "object_id": {
+          "type": "null"
+        },
+        "target_id": {
+          "type": "null"
+        },
+        "pose_name": {
+          "type": "null"
+        },
+        "reason": {
+          "type": "null"
+        }
+      }
+    }
+  },
+  {
+    "if": {
+      "properties": {
+        "skill": {
+          "const": "close_gripper"
+        }
+      }
+    },
+    "then": {
+      "properties": {
+        "object_id": {
+          "type": "null"
+        },
+        "target_id": {
+          "type": "null"
+        },
+        "pose_name": {
+          "type": "null"
+        },
+        "reason": {
+          "type": "null"
+        }
+      }
+    }
+  },
+  {
+    "if": {
+      "properties": {
+        "skill": {
+          "const": "pick"
+        }
+      }
+    },
+    "then": {
+      "properties": {
+        "object_id": {
+          "type": "string"
+        },
+        "target_id": {
+          "type": "null"
+        },
+        "pose_name": {
+          "type": "null"
+        },
+        "reason": {
+          "type": "null"
+        },
+        "scene_revision": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  {
+    "if": {
+      "properties": {
+        "skill": {
+          "const": "inspect"
+        }
+      }
+    },
+    "then": {
+      "properties": {
+        "object_id": {
+          "type": "string"
+        },
+        "target_id": {
+          "type": "null"
+        },
+        "pose_name": {
+          "type": "null"
+        },
+        "reason": {
+          "type": "null"
+        },
+        "scene_revision": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  {
+    "if": {
+      "properties": {
+        "skill": {
+          "const": "place"
+        }
+      }
+    },
+    "then": {
+      "properties": {
+        "object_id": {
+          "type": "string"
+        },
+        "target_id": {
+          "type": "string"
+        },
+        "pose_name": {
+          "type": "null"
+        },
+        "reason": {
+          "type": "null"
+        },
+        "scene_revision": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  {
+    "if": {
+      "properties": {
+        "skill": {
+          "const": "pick_and_place"
+        }
+      }
+    },
+    "then": {
+      "properties": {
+        "object_id": {
+          "type": "string"
+        },
+        "target_id": {
+          "type": "string"
+        },
+        "pose_name": {
+          "type": "null"
+        },
+        "reason": {
+          "type": "null"
+        },
+        "scene_revision": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  {
+    "if": {
+      "properties": {
+        "skill": {
+          "const": "stop"
+        }
+      }
+    },
+    "then": {
+      "properties": {
+        "object_id": {
+          "type": "null"
+        },
+        "target_id": {
+          "type": "null"
+        },
+        "pose_name": {
+          "type": "null"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        }
+      }
+    }
+  },
+  {
+    "if": {
+      "properties": {
+        "skill": {
+          "const": "refuse"
+        }
+      }
+    },
+    "then": {
+      "properties": {
+        "object_id": {
+          "type": "null"
+        },
+        "target_id": {
+          "type": "null"
+        },
+        "pose_name": {
+          "type": "null"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        }
+      }
+    }
+  }
+],
   "type": "object",
   "additionalProperties": false,
   "required": [

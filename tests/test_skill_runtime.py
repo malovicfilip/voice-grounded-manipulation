@@ -6,6 +6,7 @@ import json
 import sys
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 
 
@@ -20,6 +21,7 @@ from vgm_runtime.serialization import plan_to_mapping  # noqa: E402
 from vgm_runtime.rule_intent import RuleBasedIntentModel  # noqa: E402
 from vgm_runtime.types import GroundedScene, ObjectObservation  # noqa: E402
 from vgm_runtime.validator import SkillValidationError, SkillValidator  # noqa: E402
+from scene_fixtures import targets
 
 
 NOW = 1_800_000_000.0
@@ -32,6 +34,7 @@ def grounded_scene(
     return GroundedScene(
         revision=REVISION,
         captured_at_s=captured_at_s,
+        targets=targets(captured_at_s),
         objects={
             "red_cube": ObjectObservation(
                 "red_cube",
@@ -77,9 +80,8 @@ class SkillValidatorTest(unittest.TestCase):
 
     def test_accepts_every_allowlisted_shape(self):
         cases = [
-            (proposal("move_named_pose", pose_name="ready"), None),
-            (proposal("open_gripper"), None),
-            (proposal("close_gripper"), None),
+            (proposal("move_named_pose", pose_name="ready"), grounded_scene()),
+            (proposal("open_gripper"), grounded_scene()),
             (
                 proposal("pick", object_id="red_cube", scene_revision=REVISION),
                 grounded_scene(),
@@ -91,7 +93,7 @@ class SkillValidatorTest(unittest.TestCase):
                     target_id="blue_target",
                     scene_revision=REVISION,
                 ),
-                grounded_scene(),
+                replace(grounded_scene(), held_object_id="red_cube"),
             ),
             (
                 proposal(
@@ -172,14 +174,14 @@ class SkillValidatorTest(unittest.TestCase):
             target_id="unknown_target",
             scene_revision=REVISION,
         )
-        self.assert_rejected(target, "target_not_grounded", grounded_scene())
+        self.assert_rejected(target, "target_not_grounded", replace(grounded_scene(), held_object_id="red_cube"))
 
     def test_rejects_replay_but_stop_remains_idempotent(self):
         validator = self.validator()
         value = proposal("open_gripper")
-        validator.validate(value, None)
+        validator.validate(value, grounded_scene())
         with self.assertRaises(SkillValidationError) as raised:
-            validator.validate(value, None)
+            validator.validate(value, grounded_scene())
         self.assertEqual(raised.exception.code, "replayed_request")
         stop = proposal("stop", reason="stop")
         validator.validate(stop, None)

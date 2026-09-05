@@ -47,7 +47,9 @@ class PerceptionGroundingTest(unittest.TestCase):
         observation = scene.objects["red_cube"]
         self.assertAlmostEqual(observation.position_m[0], -0.1, places=6)
         self.assertAlmostEqual(observation.position_m[1], -0.18, places=6)
-        self.assertAlmostEqual(observation.position_m[2], 0.775, places=6)
+        # Camera is below this synthetic horizontal face: measured center is
+        # depth + half cube size, never the authored tabletop Z.
+        self.assertAlmostEqual(observation.position_m[2], 1.025, places=6)
         self.assertGreaterEqual(observation.confidence, 0.95)
         self.assertEqual(len(scene.revision), 16)
 

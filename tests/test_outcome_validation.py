@@ -16,11 +16,12 @@ from vgm_runtime.outcome import (  # noqa: E402
     validate_placement_outcome,
 )
 from vgm_runtime.types import GroundedScene, ObjectObservation  # noqa: E402
+from vgm_runtime.config import load_json_config
+from dataclasses import replace
+from scene_fixtures import targets
 
 
-POLICY = json.loads(
-    (REPOSITORY_ROOT / "config" / "safety_policy.json").read_text()
-)
+POLICY = load_json_config("safety_policy.json")
 EXECUTION = {
     "validated_skill": {
         "skill": "pick_and_place",
@@ -33,18 +34,21 @@ EXECUTION = {
 def final_scene(position=(0.018, 0.291, 0.775), confidence=0.81):
     return GroundedScene(
         "0123456789abcdef",
-        1.0,
+        2.0,
         {
             "red_cube": ObjectObservation(
-                "red_cube", position, confidence, 1.0, pixel_count=381
+                "red_cube", position, confidence, 2.0, pixel_count=381
             )
         },
+        targets=targets(2.0),
     )
 
 
 class OutcomeValidationTest(unittest.TestCase):
     def test_accepts_observed_cube_inside_target_tolerance(self):
-        result = validate_placement_outcome(EXECUTION, final_scene(), POLICY)
+        final = final_scene()
+        previous = replace(final, captured_at_s=1., objects={key: replace(obj, observed_at_s=1.) for key, obj in final.objects.items()})
+        result = validate_placement_outcome(EXECUTION, final, POLICY, previous_scene=previous, clock=lambda: 2.)
         self.assertEqual(result["status"], "accepted")
         self.assertLess(result["error_m"], 0.03)
 
@@ -56,7 +60,7 @@ class OutcomeValidationTest(unittest.TestCase):
         ]
         for scene, code in cases:
             with self.subTest(code=code), self.assertRaises(OutcomeValidationError) as raised:
-                validate_placement_outcome(EXECUTION, scene, POLICY)
+                validate_placement_outcome(EXECUTION, scene, POLICY, clock=lambda: 2.)
             self.assertEqual(raised.exception.code, code)
 
 

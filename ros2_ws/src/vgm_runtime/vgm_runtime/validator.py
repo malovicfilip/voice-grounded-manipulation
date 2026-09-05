@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 import re
 import time
+from jsonschema import Draft202012Validator
 from collections.abc import Mapping
 from typing import Any
 
@@ -12,9 +13,6 @@ from .config import load_json_config
 from .types import GroundedScene, SkillProposal, ValidatedSkill
 
 
-_IDENTIFIER = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
-_REQUEST_ID = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$")
-_SCENE_REVISION = re.compile(r"^[a-f0-9]{16}$")
 _DIRECT_CONTROL_TOKENS = frozenset(
     {"joint", "joints", "velocity", "velocities", "motor", "motors", "effort", "efforts", "torque", "torques", "trajectory", "trajectories"}
 )
@@ -55,6 +53,8 @@ class SkillValidator:
         self.clock = clock
         self._accepted_request_ids: set[str] = set()
         self._verify_configuration()
+        Draft202012Validator.check_schema(self.schema)
+        self._schema_validator = Draft202012Validator(self.schema)
 
     def _verify_configuration(self) -> None:
         if self.policy.get("policy_version") != 1:
@@ -65,6 +65,14 @@ class SkillValidator:
         policy_skills = set(self.policy["allowed_skills"])
         if schema_skills != policy_skills:
             raise ValueError("schema and policy skill allowlists differ")
+        for key in ("maximum_velocity_scale", "maximum_acceleration_scale", "maximum_scene_age_s",
+                    "minimum_object_confidence", "maximum_placement_z_error_m", "minimum_rest_observation_s",
+                    "maximum_rest_speed_m_s", "planning_time_s", "attached_object_clearance_m"):
+            value = self.policy[key]
+            if type(value) not in (int, float) or not math.isfinite(value) or value <= 0:
+                raise ValueError(f"{key} must be finite and positive")
+        if not self.policy["objects"] or not self.policy["targets"]:
+            raise ValueError("object and target allowlists must not be empty")
         if self.policy["maximum_velocity_scale"] > 0.2:
             raise ValueError("velocity scale may not exceed 0.2")
         if self.policy["maximum_acceleration_scale"] > 0.2:
@@ -91,23 +99,9 @@ class SkillValidator:
         scene: GroundedScene | None,
     ) -> ValidatedSkill:
         """Validate a raw model proposal or raise before planning is possible."""
-        if not isinstance(raw_proposal, Mapping):
-            raise SkillValidationError("invalid_type", "proposal must be an object")
-
-        self._reject_direct_control_fields(raw_proposal)
-        supplied_fields = set(raw_proposal)
-        expected_fields = SkillProposal.field_names()
-        if supplied_fields != expected_fields:
-            missing = sorted(expected_fields - supplied_fields)
-            extra = sorted(supplied_fields - expected_fields)
-            raise SkillValidationError(
-                "schema_fields",
-                f"proposal fields differ; missing={missing}, extra={extra}",
-            )
-
+        self.validate_syntax(raw_proposal)
         proposal = SkillProposal.from_mapping(raw_proposal)
-        self._validate_scalar_types(proposal)
-        self._validate_field_combination(proposal)
+        self._validate_robot_state(proposal, scene)
 
         if proposal.request_id in self._accepted_request_ids and proposal.skill != "stop":
             raise SkillValidationError("replayed_request", "request_id was already accepted")
@@ -139,8 +133,8 @@ class SkillValidator:
                 "policy_changed", "the safety policy changed after validation"
             )
         proposal = validated.proposal
-        self._validate_scalar_types(proposal)
-        self._validate_field_combination(proposal)
+        self.validate_syntax(proposal.to_mapping())
+        self._validate_robot_state(proposal, latest_scene)
         if proposal.skill in {"pick", "place", "pick_and_place", "inspect"}:
             self._validate_grounding(proposal, latest_scene)
         return ValidatedSkill(
@@ -163,112 +157,85 @@ class SkillValidator:
                 f"direct-control fields are forbidden: {', '.join(sorted(found))}",
             )
 
-    def _validate_scalar_types(self, proposal: SkillProposal) -> None:
-        if type(proposal.schema_version) is not int or proposal.schema_version != 1:
-            raise SkillValidationError("schema_version", "schema_version must be integer 1")
-        if not isinstance(proposal.request_id, str) or not _REQUEST_ID.fullmatch(
-            proposal.request_id
-        ):
-            raise SkillValidationError("request_id", "request_id is invalid")
-        if not isinstance(proposal.skill, str) or proposal.skill not in self.policy["allowed_skills"]:
-            raise SkillValidationError("skill_not_allowed", "skill is not allowlisted")
+    def validate_syntax(self, raw) -> None:
+        # The checked-in schema is executed FIRST, even for nested control fields.
+        error = next(self._schema_validator.iter_errors(raw), None)
+        if error is None:
+            return
+        self._reject_direct_control_fields(raw)
+        path = list(error.absolute_path)
+        if not isinstance(raw, Mapping):
+            code = "invalid_type"
+        elif error.validator in {"required", "additionalProperties"}:
+            code = "schema_fields"
+        elif path and path[-1] == "scene_revision" and raw.get("scene_revision") is None:
+            code = "scene_revision_required"
+        elif "then" in error.absolute_schema_path:
+            code = "invalid_parameters"
+        else:
+            code = str(path[-1]) if path else "schema_invalid"
+        # Do not echo untrusted model values in safety errors.
+        raise SkillValidationError(code, f"JSON Schema rejected {'.'.join(map(str, path)) or 'proposal'}")
 
-        for field_name in ("object_id", "target_id"):
-            value = getattr(proposal, field_name)
-            if value is not None and (
-                not isinstance(value, str) or not _IDENTIFIER.fullmatch(value)
-            ):
-                raise SkillValidationError(field_name, f"{field_name} is invalid")
-
-        if proposal.pose_name is not None and (
-            not isinstance(proposal.pose_name, str)
-            or proposal.pose_name not in self.policy["allowed_named_poses"]
-        ):
-            raise SkillValidationError("pose_name", "pose_name is not allowlisted")
-        if proposal.reason is not None and (
-            not isinstance(proposal.reason, str)
-            or not proposal.reason.strip()
-            or len(proposal.reason) > 240
-        ):
-            raise SkillValidationError("reason", "reason must be 1 to 240 characters")
-        if proposal.scene_revision is not None and (
-            not isinstance(proposal.scene_revision, str)
-            or not _SCENE_REVISION.fullmatch(proposal.scene_revision)
-        ):
-            raise SkillValidationError("scene_revision", "scene_revision is invalid")
-
-    def _validate_field_combination(self, proposal: SkillProposal) -> None:
-        empty = {
-            "object_id": proposal.object_id is None,
-            "target_id": proposal.target_id is None,
-            "pose_name": proposal.pose_name is None,
-            "reason": proposal.reason is None,
-        }
+    def _validate_robot_state(self, proposal, scene):
         skill = proposal.skill
-        valid = False
-        if skill == "move_named_pose":
-            valid = empty["object_id"] and empty["target_id"] and not empty["pose_name"] and empty["reason"]
-        elif skill in {"open_gripper", "close_gripper"}:
-            valid = all(empty.values())
-        elif skill in {"pick", "inspect"}:
-            valid = not empty["object_id"] and empty["target_id"] and empty["pose_name"] and empty["reason"]
-        elif skill in {"place", "pick_and_place"}:
-            valid = not empty["object_id"] and not empty["target_id"] and empty["pose_name"] and empty["reason"]
-        elif skill in {"stop", "refuse"}:
-            valid = empty["object_id"] and empty["target_id"] and empty["pose_name"] and not empty["reason"]
-        if not valid:
-            raise SkillValidationError(
-                "invalid_parameters", f"fields are invalid for skill {skill}"
-            )
-        if skill in {"pick", "place", "pick_and_place", "inspect"} and proposal.scene_revision is None:
-            raise SkillValidationError(
-                "scene_revision_required", "grounded skills require a scene revision"
-            )
+        if skill in {"stop", "refuse"}:
+            return
+        if scene is None:
+            raise SkillValidationError("scene_required", "fresh robot state is required")
+        self._validate_scene_age(scene)
+        held = scene.held_object_id
+        if skill == "place" and held != proposal.object_id:
+            raise SkillValidationError("not_holding_object", "place requires the same held object")
+        if held is not None and skill != "place":
+            raise SkillValidationError("object_already_held", "place the held object before another action")
+        # A free-standing close has no validated grasp geometry. Only the
+        # coordinator's pick sequence may close around an observed object.
+        if skill == "close_gripper":
+            raise SkillValidationError("grasp_context_required", "close_gripper requires a validated pick sequence")
+        if proposal.pose_name is not None and proposal.pose_name not in self.policy["allowed_named_poses"]:
+            raise SkillValidationError("pose_name", "named pose is not allowed by policy")
 
-    def _validate_grounding(
-        self,
-        proposal: SkillProposal,
-        scene: GroundedScene | None,
-    ) -> None:
+    def _validate_scene_age(self, scene):
+        age = float(self.clock()) - scene.captured_at_s
+        if not math.isfinite(age) or not 0.0 <= age <= self.policy["maximum_scene_age_s"]:
+            raise SkillValidationError("stale_scene", "grounded scene or robot state is stale")
+
+    def _validate_observation(self, observation, scene, label):
+        if observation.frame_id != "world":
+            raise SkillValidationError("invalid_frame", f"{label} must be in the world frame")
+        if not math.isfinite(observation.confidence) or not (
+            self.policy["minimum_object_confidence"] <= observation.confidence <= 1.0
+        ):
+            raise SkillValidationError("low_confidence", f"{label} confidence is too low")
+        age = scene.captured_at_s - observation.observed_at_s
+        if not math.isfinite(age) or not 0.0 <= age <= self.policy["maximum_scene_age_s"]:
+            raise SkillValidationError("stale_" + label, f"{label} observation is stale")
+        self._validate_workspace_position(observation.position_m, label)
+
+    def _validate_grounding(self, proposal, scene):
         if scene is None:
             raise SkillValidationError("scene_required", "grounded scene is required")
         if proposal.scene_revision != scene.revision:
             raise SkillValidationError("stale_revision", "scene revision does not match")
-
-        age = float(self.clock()) - scene.captured_at_s
-        if not math.isfinite(age) or age < 0.0 or age > self.policy["maximum_scene_age_s"]:
-            raise SkillValidationError("stale_scene", "grounded scene is stale")
-
-        if proposal.skill == "place" and scene.held_object_id == proposal.object_id:
-            target = self.policy["targets"].get(proposal.target_id)
-            if target is None:
-                raise SkillValidationError("target_not_grounded", "target is not allowlisted")
-            self._validate_workspace_position(tuple(target["position_m"]), "target")
-            return
-
-        observation = scene.objects.get(proposal.object_id or "")
-        if observation is None:
-            raise SkillValidationError("object_not_grounded", "object is not grounded")
-        if not math.isfinite(observation.confidence) or not (
-            self.policy["minimum_object_confidence"] <= observation.confidence <= 1.0
-        ):
-            raise SkillValidationError("low_confidence", "object confidence is too low")
-        object_age = scene.captured_at_s - observation.observed_at_s
-        if not math.isfinite(object_age) or not 0.0 <= object_age <= self.policy["maximum_scene_age_s"]:
-            raise SkillValidationError("stale_object", "object observation is stale")
-        self._validate_workspace_position(observation.position_m, "object")
-
+        if proposal.object_id not in self.policy["objects"]:
+            raise SkillValidationError("object_not_grounded", "object is not allowlisted")
+        if not (proposal.skill == "place" and scene.held_object_id == proposal.object_id):
+            observation = scene.objects.get(proposal.object_id)
+            if observation is None:
+                raise SkillValidationError("object_not_grounded", "object is not grounded")
+            self._validate_observation(observation, scene, "object")
         if proposal.skill in {"place", "pick_and_place"}:
-            target = self.policy["targets"].get(proposal.target_id)
-            if target is None:
-                raise SkillValidationError("target_not_grounded", "target is not allowlisted")
-            self._validate_workspace_position(tuple(target["position_m"]), "target")
+            target = scene.targets.get(proposal.target_id)
+            if proposal.target_id not in self.policy["targets"] or target is None:
+                raise SkillValidationError("target_not_grounded", "fresh perceived target is required")
+            self._validate_observation(target, scene, "target")
 
     def _validate_workspace_position(
         self, position: tuple[float, float, float], label: str
     ) -> None:
         if len(position) != 3 or not all(
-            isinstance(value, (int, float)) and math.isfinite(value)
+            type(value) in (int, float) and math.isfinite(value)
             for value in position
         ):
             raise SkillValidationError("invalid_position", f"{label} position is invalid")

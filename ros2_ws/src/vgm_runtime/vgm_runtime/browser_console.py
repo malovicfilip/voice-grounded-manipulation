@@ -96,6 +96,10 @@ class BrowserController:
         threading.Thread(target=work).start()
 
     def prepare(self, *, audio=None, transcript=None):
+        from .stop_intent import is_stop_request
+        if is_stop_request(transcript):
+            self.stop()
+            return
         if audio is not None:
             validate_wav(audio)
         elif not isinstance(transcript, str) or not 0 < len(transcript.strip()) <= 2000:
@@ -115,6 +119,9 @@ class BrowserController:
                         path.write_bytes(audio)
                         speech = self.transcribe(self.backend.backend, path)
                         text = speech["text"]
+                if is_stop_request(text):
+                    self.stop()
+                    return {"status": "stopping"}
                 if self.backend.cancelled.is_set():
                     return {"status": "stopped"}
                 result = self.task.prepare(text)
@@ -149,6 +156,7 @@ class BrowserController:
             self.workers += 1
             self.backend.cancelled.set()
             self.task._stop.set()
+            self.task._clarification = None
             self.task.pending = None
             self.view = {**self.view, "status": "stopping", "confirmation": None}
 

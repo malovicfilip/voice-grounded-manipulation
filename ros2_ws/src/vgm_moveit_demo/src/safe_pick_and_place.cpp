@@ -1,4 +1,6 @@
 #include <chrono>
+#include <algorithm>
+#include "vgm_safety_config.hpp"
 #include <atomic>
 #include <array>
 #include <cmath>
@@ -8,6 +10,7 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include <Eigen/Geometry>
 
 #include <geometry_msgs/msg/pose.hpp>
 #include <moveit/move_group_interface/move_group_interface.hpp>
@@ -19,24 +22,14 @@
 
 namespace
 {
-constexpr double kVelocityScale = 0.20;
-constexpr double kAccelerationScale = 0.20;
-constexpr double kPlanningTimeSeconds = 5.0;
-constexpr double kExecutionDeadlineSeconds = 120.0;
-constexpr double kCubeSize = 0.05;
-constexpr double kAttachedObjectClearance = 0.005;
-const std::set<std::string> kAllowedObjects = {
-  "red_cube", "green_cube", "blue_cube", "yellow_cube", "magenta_cube", "cyan_cube"};
-const std::map<std::string, std::array<double, 3>> kAllowedTargets = {
-  {"blue_target", {0.0, 0.3, 0.75}},
-  {"yellow_target", {0.0, -0.3, 0.75}},
-};
+using namespace vgm_safety;
 
 bool finite_and_bounded(double x, double y, double z)
 {
   return std::isfinite(x) && std::isfinite(y) && std::isfinite(z) &&
-         x >= -0.55 && x <= 0.55 && y >= -0.35 && y <= 0.35 &&
-         z >= 0.74 && z <= 1.35;
+         x >= kWorkspaceLower[0] && x <= kWorkspaceUpper[0] &&
+         y >= kWorkspaceLower[1] && y <= kWorkspaceUpper[1] &&
+         z >= kWorkspaceLower[2] && z <= kWorkspaceUpper[2];
 }
 
 moveit_msgs::msg::CollisionObject make_box(
@@ -45,6 +38,7 @@ moveit_msgs::msg::CollisionObject make_box(
 {
   moveit_msgs::msg::CollisionObject object;
   object.header.frame_id = "world";
+  object.pose.orientation.w = 1.0;
   object.id = id;
   shape_msgs::msg::SolidPrimitive primitive;
   primitive.type = shape_msgs::msg::SolidPrimitive::BOX;
@@ -98,8 +92,13 @@ public:
   bool run(
     const std::string& request_id, const std::string& object_id,
     const std::string& target_id, const std::array<double, 3>& object_position,
+    const std::array<double, 3>& target,
     const std::string& skill = "pick_and_place", const std::string& pose_name = "")
   {
+    if (skill == "close_gripper") {
+      RCLCPP_ERROR(node_->get_logger(), "Standalone close requires validated grasp context");
+      return false;
+    }
     const auto held = planning_scene_.getAttachedObjects();
     if ((!held.empty() && (skill != "place" || held.size() != 1 || held.count(object_id) != 1)) ||
         (skill == "place" && held.count(object_id) != 1)) {
@@ -120,10 +119,10 @@ public:
       if (!move_hand("open", "open_gripper")) {
         return false;
       }
-      if (!move_arm(object_position[0], object_position[1], object_position[2] + 0.20, "pick_approach")) {
+      if (!move_arm(object_position[0], object_position[1], object_position[2] + k_pick_approach_height_m, "pick_approach")) {
         return false;
       }
-      if (!move_arm(object_position[0], object_position[1], object_position[2] + 0.105, "pick_descend")) {
+      if (!move_arm(object_position[0], object_position[1], object_position[2] + k_pick_grasp_height_offset_m, "pick_descend")) {
         return false;
       }
       if (!move_hand("close", "close_gripper")) {
@@ -132,7 +131,7 @@ public:
       if (!attach_object(object_id, object_position)) {
         return false;
       }
-      if (!move_arm(object_position[0], object_position[1], object_position[2] + 0.23, "pick_retreat")) {
+      if (!move_arm(object_position[0], object_position[1], object_position[2] + k_pick_retreat_height_m, "pick_retreat")) {
         return false;
       }
     }
@@ -143,11 +142,10 @@ public:
       RCLCPP_ERROR(node_->get_logger(), "Placement requires the requested attached object");
       return false;
     }
-    const auto target = kAllowedTargets.at(target_id);
-    if (!move_arm(target[0], target[1], target[2] + 0.25, "place_approach")) {
+    if (!move_arm(target[0], target[1], target[2] + k_place_approach_height_m, "place_approach")) {
       return false;
     }
-    if (!move_arm(target[0], target[1], target[2] + 0.14, "place_descend")) {
+    if (!move_arm(target[0], target[1], target[2] + k_place_release_height_offset_m, "place_descend")) {
       return false;
     }
     if (!move_hand("open", "release_gripper")) {
@@ -160,18 +158,57 @@ public:
       RCLCPP_ERROR(node_->get_logger(), "Failed to detach allowlisted object '%s'", object_id.c_str());
       return false;
     }
-    moveit_msgs::msg::CollisionObject released_object;
-    released_object.header.frame_id = "world";
-    released_object.id = object_id;
-    released_object.operation = moveit_msgs::msg::CollisionObject::REMOVE;
-    if (!planning_scene_.applyCollisionObject(released_object)) {
-      RCLCPP_ERROR(
-        node_->get_logger(), "Failed to remove released object '%s' from the planning scene",
-        object_id.c_str());
+    // detachObject publishes asynchronously. Wait for the world transfer and
+    // verify it before planning retreat; never remove the released obstacle.
+    const auto detach_deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+    while (planning_scene_.getAttachedObjects({object_id}).count(object_id) != 0) {
+      if (!before_deadline("detach_wait") || std::chrono::steady_clock::now() > detach_deadline) {
+        return false;
+      }
+      std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    }
+    const auto released = planning_scene_.getObjects({object_id});
+    if (released.count(object_id) != 1 || released.at(object_id).primitives.empty()) {
+      RCLCPP_ERROR(node_->get_logger(), "Released object missing from collision world");
+      return false;
+    }
+    // Preserve MoveIt's transformed release pose (not the spawn pose). Extend
+    // downward to cover gravity settling to the measured support plane too.
+    const auto& released_object = released.at(object_id);
+    if (released_object.header.frame_id != "world" || released_object.primitive_poses.size() != 1 ||
+        released_object.primitives.size() != 1) {return false;}
+    const auto& box = released_object.primitives.at(0);
+    const auto& pose = released_object.primitive_poses.at(0);
+    if (box.type != shape_msgs::msg::SolidPrimitive::BOX || box.dimensions.size() != 3) {
+      return false;
+    }
+    const auto& origin = released_object.pose;
+    Eigen::Quaterniond rotation(origin.orientation.w, origin.orientation.x, origin.orientation.y, origin.orientation.z);
+    Eigen::Quaterniond shape_rotation(pose.orientation.w, pose.orientation.x, pose.orientation.y, pose.orientation.z);
+    if (!rotation.coeffs().allFinite() || !shape_rotation.coeffs().allFinite() ||
+        rotation.norm() < 0.99 || shape_rotation.norm() < 0.99) {return false;}
+    rotation.normalize();
+    shape_rotation.normalize();
+    const Eigen::Vector3d center = rotation * Eigen::Vector3d(pose.position.x, pose.position.y, pose.position.z) +
+      Eigen::Vector3d(origin.position.x, origin.position.y, origin.position.z);
+    Eigen::Vector3d dimensions = (rotation * shape_rotation).toRotationMatrix().cwiseAbs() *
+      Eigen::Vector3d(box.dimensions[0], box.dimensions[1], box.dimensions[2]);
+    if (!center.allFinite() || !dimensions.allFinite() || (dimensions.array() <= 0).any()) {return false;}
+    const double placed_center_z = target[2] + kObjectSizes.at(object_id) / 2.0;
+    const double release_z = center.z();
+    if (!std::isfinite(release_z) || release_z < placed_center_z - kAttachedObjectClearance) {
+      return false;
+    }
+    const double settling_distance = std::max(0.0, release_z - placed_center_z);
+    dimensions.z() += settling_distance;
+    const auto placed_obstacle = make_box(object_id,
+      {center.x(), center.y(), center.z() - settling_distance / 2.0},
+      {dimensions.x(), dimensions.y(), dimensions.z()});
+    if (!planning_scene_.applyCollisionObject(placed_obstacle)) {
       return false;
     }
     RCLCPP_INFO(node_->get_logger(), "VGM_PRIMITIVE_COMPLETE kind=detach_object");
-    if (!move_arm(target[0], target[1], target[2] + 0.28, "place_retreat")) {
+    if (!move_arm(target[0], target[1], target[2] + k_place_retreat_height_m, "place_retreat")) {
       return false;
     }
     RCLCPP_INFO(
@@ -185,13 +222,22 @@ private:
   void configure_group(moveit::planning_interface::MoveGroupInterface& group)
   {
     group.setPlanningTime(kPlanningTimeSeconds);
-    group.setNumPlanningAttempts(3);
+    group.setNumPlanningAttempts(kPlanningAttempts);
     group.setMaxVelocityScalingFactor(kVelocityScale);
     group.setMaxAccelerationScalingFactor(kAccelerationScale);
   }
 
   bool before_deadline(const std::string& primitive)
   {
+    if (!motion_started_) {
+      const auto now_s = std::chrono::duration<double>(
+        std::chrono::system_clock::now().time_since_epoch()).count();
+      const auto age = now_s - node_->get_parameter("scene_captured_at_s").as_double();
+      if (!std::isfinite(age) || age < 0 || age > kSceneAgeSeconds) {
+        cancel("stale_scene_before_first_motion");
+        return false;
+      }
+    }
     // Operator-only acceptance fixture. It can only inhibit motion.
     if (node_->has_parameter("fault_before_primitive") && primitive == "pick_approach" &&
         node_->get_parameter("fault_before_primitive").as_string() == "pick_approach") {
@@ -226,6 +272,7 @@ private:
       return false;
     }
     RCLCPP_INFO(node_->get_logger(), "VGM_PRIMITIVE_START kind=%s", primitive.c_str());
+    motion_started_ = true;
     if (group.execute(plan) != moveit::core::MoveItErrorCode::SUCCESS || stopped_) {
       cancel("execution_failure");
       RCLCPP_ERROR(node_->get_logger(), "MoveIt execution failed for '%s'", primitive.c_str());
@@ -269,27 +316,22 @@ private:
   bool add_static_collision_objects(const std::string& selected_object)
   {
     std::vector<moveit_msgs::msg::CollisionObject> objects;
-    objects.push_back(make_box("table", {0.0, 0.0, 0.725}, {1.2, 0.8, 0.05}));
-    const std::map<std::string, std::array<double, 3>> initial_positions = {
-      {"red_cube", {-0.1, -0.18, 0.775}},
-      {"green_cube", {0.1, -0.18, 0.775}},
-      {"blue_cube", {0.3, -0.18, 0.775}},
-      {"yellow_cube", {-0.1, 0.18, 0.775}},
-      {"magenta_cube", {0.1, 0.18, 0.775}},
-      {"cyan_cube", {0.3, 0.18, 0.775}},
-    };
-    for (const auto& [id, initial_position] : initial_positions) {
-      auto position = initial_position;
+    objects.push_back(make_box("table", kTablePosition, kTableDimensions));
+    for (const auto& id : kAllowedObjects) {
+      if (id == selected_object) {continue;}
       const auto parameter_name = "scene_" + id;
-      if (node_->has_parameter(parameter_name)) {
-        const auto observed = node_->get_parameter(parameter_name).as_double_array();
-        if (observed.size() != 3 || !finite_and_bounded(observed[0], observed[1], observed[2])) {
-          return false;
-        }
-        position = {observed[0], observed[1], observed[2]};
+      if (!node_->has_parameter(parameter_name)) {
+        RCLCPP_ERROR(node_->get_logger(), "Missing collision evidence for %s", id.c_str());
+        return false;
       }
+      const auto observed = node_->get_parameter(parameter_name).as_double_array();
+      if (observed.size() != 3 || !finite_and_bounded(observed[0], observed[1], observed[2])) {
+        return false;
+      }
+      const std::array<double, 3> position = {observed[0], observed[1], observed[2]};
+      const double size = kObjectSizes.at(id);
       if (id != selected_object) {
-        objects.push_back(make_box(id, position, {kCubeSize, kCubeSize, kCubeSize}));
+        objects.push_back(make_box(id, position, {size, size, size}));
       }
     }
     return planning_scene_.applyCollisionObjects(objects);
@@ -301,10 +343,11 @@ private:
     if (!before_deadline("attach_object")) {
       return false;
     }
+    const double size = kObjectSizes.at(object_id);
     auto planning_position = object_position;
     planning_position[2] += kAttachedObjectClearance;
     if (!planning_scene_.applyCollisionObject(
-      make_box(object_id, planning_position, {kCubeSize, kCubeSize, kCubeSize}))) {
+      make_box(object_id, planning_position, {size, size, size}))) {
       return false;
     }
     const auto* hand_model = arm_.getRobotModel()->getJointModelGroup("hand");
@@ -327,6 +370,7 @@ private:
   moveit::planning_interface::PlanningSceneInterface planning_scene_;
   std::chrono::steady_clock::time_point deadline_;
   std::atomic<bool> stopped_{false};
+  bool motion_started_{false};
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr stop_service_;
   rclcpp::TimerBase::SharedPtr watchdog_;
 };
@@ -366,15 +410,27 @@ int main(int argc, char** argv)
     double_parameter("object_z"),
   };
 
-  const std::set<std::string> allowed_skills = {
-    "pick", "place", "pick_and_place", "move_named_pose", "open_gripper", "close_gripper"};
+  const std::array<double, 3> target_position = {
+    double_parameter("target_x"), double_parameter("target_y"), double_parameter("target_z")};
+  const auto digest = string_parameter("safety_policy_digest");
+  const auto captured_at = double_parameter("scene_captured_at_s");
+  const auto now_s = std::chrono::duration<double>(
+    std::chrono::system_clock::now().time_since_epoch()).count();
+  if (digest != kPolicyDigest || !std::isfinite(captured_at) ||
+      now_s - captured_at < 0 || now_s - captured_at > kSceneAgeSeconds) {
+    RCLCPP_ERROR(node->get_logger(), "Policy build mismatch or stale scene; rebuild/reobserve required");
+    rclcpp::shutdown();
+    return 2;
+  }
   const bool grounded = skill == "pick" || skill == "place" || skill == "pick_and_place";
   const bool placing = skill == "place" || skill == "pick_and_place";
-  if (request_id.empty() || request_id.size() > 64 || allowed_skills.count(skill) == 0 ||
-      (grounded && (kAllowedObjects.count(object_id) == 0 ||
-       !finite_and_bounded(object_position[0], object_position[1], object_position[2]))) ||
-      (placing && kAllowedTargets.count(target_id) == 0) ||
-      (skill == "move_named_pose" && pose_name != "ready" && pose_name != "extended" && pose_name != "transport")) {
+  if (request_id.empty() || request_id.size() > 64 || kAllowedSkills.count(skill) == 0 ||
+      (grounded && kAllowedObjects.count(object_id) == 0) ||
+      ((skill == "pick" || skill == "pick_and_place") &&
+       !finite_and_bounded(object_position[0], object_position[1], object_position[2])) ||
+      (placing && (kAllowedTargets.count(target_id) == 0 ||
+       !finite_and_bounded(target_position[0], target_position[1], target_position[2]))) ||
+      (skill == "move_named_pose" && kAllowedNamedPoses.count(pose_name) == 0)) {
     RCLCPP_ERROR(
       node->get_logger(), "Rejected request: invalid ID, allowlist entry, or grounded position");
     rclcpp::shutdown();
@@ -388,7 +444,7 @@ int main(int argc, char** argv)
   std::unique_ptr<SafeExecutor> executor;
   try {
     executor = std::make_unique<SafeExecutor>(node);
-    exit_code = executor->run(request_id, object_id, target_id, object_position, skill, pose_name) ? 0 : 1;
+    exit_code = executor->run(request_id, object_id, target_id, object_position, target_position, skill, pose_name) ? 0 : 1;
     if (exit_code != 0) {executor->cancel("skill_failure");}
     RCLCPP_INFO(node->get_logger(), "VGM_SKILL_RESULT skill=%s status=%s", skill.c_str(),
                 exit_code == 0 ? "succeeded" : "failed");

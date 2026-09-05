@@ -253,7 +253,7 @@ run_ros ros2 run vgm_runtime execution_gate \
   --output-json "${HOST_OUTPUT}/execution_plan.json" \
   >"${HOST_OUTPUT}/execution_gate.log"
 
-mapfile -t EXECUTION_ARGUMENTS < <(python3 - "${HOST_OUTPUT}/execution_plan.json" <<'PY'
+mapfile -t EXECUTION_ARGUMENTS < <(run_ros python - "${HOST_OUTPUT}/execution_plan.json" <<'PY'
 import json
 import sys
 
@@ -273,7 +273,8 @@ print(skill["object_id"])
 print(skill["target_id"])
 print(positions[0][0])
 print(positions[0][1])
-print(positions[0][2] - 0.20)
+from vgm_runtime.config import load_json_config
+print(positions[0][2] - load_json_config("safety_policy.json")["pick"]["approach_height_m"])
 PY
 )
 if [[ "${#EXECUTION_ARGUMENTS[@]}" -ne 6 ]]; then
@@ -301,10 +302,13 @@ run_ros timeout 130 ros2 launch vgm_moveit_demo safe_pick_and_place.launch.py \
   object_x:="${EXECUTION_ARGUMENTS[3]}" \
   object_y:="${EXECUTION_ARGUMENTS[4]}" \
   object_z:="${EXECUTION_ARGUMENTS[5]}" \
+  scene_file:="${HOST_OUTPUT}/verification_grounded_scene.json" \
   | tee "${HOST_OUTPUT}/execution.log"
 grep -q 'VGM_PICK_PLACE_RESULT .*plan=success execution=success' \
   "${HOST_OUTPUT}/execution.log"
 
+run_ros python -c 'import json,sys; from vgm_runtime.session_backend import robot_state; from pathlib import Path; Path(sys.argv[1]).write_text(json.dumps(robot_state()))' \
+  "${HOST_OUTPUT}/final_robot_state.json"
 touch "${HOST_OUTPUT}/capture_final.request"
 for _ in {1..90}; do
   [[ -s "${HOST_OUTPUT}/isaac_capture.json" ]] && break
@@ -321,6 +325,8 @@ fi
 run_ros ros2 run vgm_runtime validate_outcome \
   --execution-plan "${HOST_OUTPUT}/execution_plan.json" \
   --final-scene "${HOST_OUTPUT}/final_grounded_scene.json" \
+  --previous-scene "${HOST_OUTPUT}/rest_start_grounded_scene.json" \
+  --robot-state "${HOST_OUTPUT}/final_robot_state.json" \
   --output-json "${HOST_OUTPUT}/outcome_validation.json"
 
 python3 - "${HOST_OUTPUT}/manifest.json" "${RUN_ID}" "${PROVIDER}" <<'PY'

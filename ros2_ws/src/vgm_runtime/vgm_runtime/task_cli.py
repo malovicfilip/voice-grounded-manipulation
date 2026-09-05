@@ -12,6 +12,8 @@ from .audit import AuditLogger
 from .openai_intent import load_local_api_key
 from .ssh_backend import SSHBackend
 from .tasks import OpenAITaskModel, TaskSession
+from .stop_intent import is_stop_request
+from .config import load_json_config
 
 
 def upload_and_transcribe(backend, audio: Path):
@@ -32,10 +34,13 @@ def main():
     source.add_argument("--audio", type=Path)
     parser.add_argument("--confirm", action="store_true", help="explicitly confirm this supplied command for unattended execution")
     parser.add_argument("--operation", choices=("stop", "recover", "recover_place", "capture", "robot_state", "shutdown"))
-    parser.add_argument("--target", choices=("blue_target", "yellow_target"))
+    parser.add_argument("--target", choices=sorted(load_json_config("safety_policy.json")["targets"]))
     parser.add_argument("--audit", type=Path, default=Path("isaac_sim/_output/operator-audit.jsonl"))
     args = parser.parse_args()
     backend = SSHBackend(args.session, host=args.host)
+    if is_stop_request(args.transcript):
+        print(json.dumps(backend.request("stop"), indent=2))
+        return
     if args.operation:
         if args.operation == "recover_place":
             if not args.confirm or not args.target:
@@ -114,7 +119,7 @@ def main():
                 session.pending = None
                 session.state = "idle"
                 session.audit.record("confirmed_placement_recovery", result)
-            elif text.lower() == "stop":
+            elif is_stop_request(text):
                 result = session.stop()
             else:
                 if text.startswith("audio "):

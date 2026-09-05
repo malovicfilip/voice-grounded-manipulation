@@ -137,7 +137,7 @@ class OpenAIIntentModel:
             "request_id": request_id,
             "scene_revision": scene.revision,
             "available_object_ids": sorted(scene.objects),
-            "available_target_ids": sorted(policy["targets"]),
+            "available_target_ids": sorted(set(policy["targets"]) & set(scene.targets)),
             "allowed_named_poses": list(policy["allowed_named_poses"]),
             "transcript": transcript,
         }
@@ -159,7 +159,9 @@ class OpenAIIntentModel:
                     "type": "json_schema",
                     "name": self.response_name,
                     "strict": True,
-                    "schema": self.schema,
+                    # The provider's subset is only an output aid. Full local
+                    # schema (including skill conditionals) is mandatory below.
+                    "schema": {k: v for k, v in self.schema.items() if k != "allOf"},
                 }
             },
         }
@@ -179,6 +181,11 @@ class OpenAIIntentModel:
             raise IntentModelError("structured output was not valid JSON") from error
         if not isinstance(proposal, dict):
             raise IntentModelError("structured output was not an object")
+        from jsonschema import Draft202012Validator, ValidationError
+        try:
+            Draft202012Validator(self.schema).validate(proposal)
+        except ValidationError as error:
+            raise IntentModelError("structured output failed JSON Schema validation") from error
         if proposal.get("request_id") != request_id:
             raise IntentModelError("model changed the request_id")
         return proposal

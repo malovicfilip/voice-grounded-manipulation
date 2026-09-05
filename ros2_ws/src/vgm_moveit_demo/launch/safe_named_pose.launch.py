@@ -8,6 +8,7 @@ from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from moveit_configs_utils import MoveItConfigsBuilder
+from vgm_runtime.config import load_json_config, policy_digest
 
 
 def generate_launch_description():
@@ -42,6 +43,7 @@ def generate_launch_description():
                     moveit_config.robot_description_semantic,
                     moveit_config.robot_description_kinematics,
                     {"target": LaunchConfiguration("target")},
+                    {"safety_policy_digest": policy_digest(load_json_config("safety_policy.json"))},
                 ],
             ),
         ]

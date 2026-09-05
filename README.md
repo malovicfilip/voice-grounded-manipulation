@@ -10,12 +10,19 @@ The LLM is an intent parser, not a motion controller. It receives only a
 transcript, a scene revision, and allowlisted object/target identifiers. Its
 strict JSON response is validated again against fresh RGB-D observations before
 the deterministic coordinator can create a plan. The LLM must never directly
-control joints, velocities, motors, torques, efforts, or trajectories.
+control joints, coordinates, velocities, motors, torques, efforts, or trajectories.
 
 Only MoveIt 2 may plan trajectories. The execution layer additionally enforces
 workspace limits, collision objects, 20% velocity/acceleration scaling, a
 120-second deadline, and final RGB-D outcome validation. Any missing, stale,
 ambiguous, malformed, or unsafe input fails closed without a motion request.
+
+The latest [safety hardening](docs/safety_hardening.md) adds measured 3D targets,
+two-frame resting-object verification, retained placement collisions, canonical
+Python/C++ safety configuration, direct JSON Schema enforcement, and deterministic
+STOP handling. Offline regression tests pass; these revisions still require a
+fresh MoveIt build and simulator acceptance run. Phase acceptance labels below
+describe the previously demonstrated version, not certification of these changes.
 
 ## Roadmap
 

@@ -8,12 +8,12 @@ import re
 from pathlib import Path
 from typing import Any, Mapping
 
-from .types import GroundedScene, ObjectObservation, TaskPlan
+from .types import GroundedScene, ObjectObservation, TargetObservation, TaskPlan
 
 
 def scene_from_mapping(value: Mapping[str, Any]) -> GroundedScene:
     required = {"revision", "captured_at_s", "objects"}
-    if not isinstance(value, Mapping) or not required <= set(value) or set(value) - required - {"held_object_id"}:
+    if not isinstance(value, Mapping) or not required <= set(value) or set(value) - required - {"held_object_id", "targets"}:
         raise ValueError("grounded scene fields are invalid")
     if not isinstance(value["revision"], str) or not re.fullmatch("[a-f0-9]{16}", value["revision"]):
         raise ValueError("invalid scene revision")
@@ -26,6 +26,21 @@ def scene_from_mapping(value: Mapping[str, Any]) -> GroundedScene:
             raise ValueError("scene numbers must be finite numeric values")
         return float(raw)
     observations: dict[str, ObjectObservation] = {}
+    # Reuse the same strict observation decoder; do not invent target poses
+    # when loading historical files that predate target observations.
+    targets = {}
+    if not isinstance(value.get("targets", []), list):
+        raise ValueError("grounded targets must be an array")
+    for raw in value.get("targets", []):
+        if not isinstance(raw, Mapping) or "target_id" not in raw or "object_id" in raw:
+            raise ValueError("invalid target observation")
+        converted = {("object_id" if key == "target_id" else key): item for key, item in raw.items()}
+        decoded = scene_from_mapping({"revision": value["revision"], "captured_at_s": value["captured_at_s"],
+                                      "objects": [converted]}).objects[raw["target_id"]]
+        if raw["target_id"] in targets:
+            raise ValueError("duplicate target ID")
+        targets[raw["target_id"]] = TargetObservation(raw["target_id"], decoded.position_m,
+            decoded.confidence, decoded.observed_at_s, decoded.frame_id, decoded.pixel_count)
     if not isinstance(value["objects"], list):
         raise ValueError("grounded scene objects must be an array")
     expected = {
@@ -67,6 +82,7 @@ def scene_from_mapping(value: Mapping[str, Any]) -> GroundedScene:
         captured_at_s=number(value["captured_at_s"]),
         objects=observations,
         held_object_id=value.get("held_object_id"),
+        targets=targets,
     )
 
 

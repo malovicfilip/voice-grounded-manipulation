@@ -44,6 +44,12 @@ def rebind_after_capture(
         drift = math.dist(observation.position_m, latest.objects[object_id].position_m)
         if not math.isfinite(drift) or drift > validator.policy["maximum_object_drift_m"]:
             raise SkillValidationError("object_moved", "scene geometry moved between captures")
+    if set(original.targets) != set(latest.targets):
+        raise SkillValidationError("target_not_grounded", "target identities changed between captures")
+    for target_id, observation in original.targets.items():
+        drift = math.dist(observation.position_m, latest.targets[target_id].position_m)
+        if not math.isfinite(drift) or drift > validator.policy["maximum_object_drift_m"]:
+            raise SkillValidationError("target_moved", "target moved between captures")
     refreshed = {**proposal, "scene_revision": latest.revision}
     SkillValidator(policy=validator.policy, schema=validator.schema, clock=validator.clock).validate(refreshed, latest)
     return refreshed
@@ -85,6 +91,19 @@ def gate_decision(
         _reject_object_drift(
             decision.get("plan"), proposal.object_id, latest_scene, validator
         )
+    if proposal.skill in {"place", "pick_and_place"}:
+        primitives = decision.get("plan", {}).get("primitives", [])
+        motions = [p.get("position_m") for p in primitives
+                   if isinstance(p, Mapping) and p.get("kind") == "move_cartesian"]
+        expected_count = 6 if proposal.skill == "pick_and_place" else 3
+        if len(motions) != expected_count or not isinstance(motions[-3], list) or len(motions[-3]) != 3:
+            raise SkillValidationError("plan_invalid", "original placement motion is missing")
+        position = motions[-3]
+        if not all(type(v) in (int, float) and math.isfinite(v) for v in position):
+            raise SkillValidationError("plan_invalid", "invalid original placement motion")
+        original_target = (position[0], position[1], position[2] - validator.policy["place"]["approach_height_m"])
+        if math.dist(original_target, latest_scene.targets[proposal.target_id].position_m) > validator.policy["maximum_object_drift_m"]:
+            raise SkillValidationError("target_moved", "target moved after intent validation")
     plan = TaskCoordinator(validator.policy).create_plan(refreshed, latest_scene)
     return {
         "validated_skill": refreshed.to_mapping(),

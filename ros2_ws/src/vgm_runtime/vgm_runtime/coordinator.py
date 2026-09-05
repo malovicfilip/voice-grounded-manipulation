@@ -33,12 +33,12 @@ class TaskCoordinator:
             primitives = self._pick_primitives(proposal.object_id, scene)
         elif proposal.skill == "place":
             primitives = self._place_primitives(
-                proposal.object_id, proposal.target_id
+                proposal.object_id, proposal.target_id, scene
             )
         elif proposal.skill == "pick_and_place":
             primitives = (
                 *self._pick_primitives(proposal.object_id, scene),
-                *self._place_primitives(proposal.object_id, proposal.target_id),
+                *self._place_primitives(proposal.object_id, proposal.target_id, scene),
             )
         elif proposal.skill == "stop":
             primitives = (MotionPrimitive("stop"),)
@@ -84,11 +84,11 @@ class TaskCoordinator:
         )
 
     def _place_primitives(
-        self, object_id: str | None, target_id: str | None
+        self, object_id: str | None, target_id: str | None, scene: GroundedScene | None
     ) -> tuple[MotionPrimitive, ...]:
-        if object_id is None or target_id not in self.policy["targets"]:
+        if object_id is None or target_id not in self.policy["targets"] or scene is None or target_id not in scene.targets:
             raise ValueError("validated place is missing its allowlisted target")
-        x, y, z = self.policy["targets"][target_id]["position_m"]
+        x, y, z = scene.targets[target_id].position_m
         place = self.policy["place"]
         return (
             MotionPrimitive(

@@ -10,6 +10,7 @@ from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 from moveit_configs_utils import MoveItConfigsBuilder
+from vgm_runtime.moveit_parameters import execution_parameters
 
 
 def generate_launch_description():
@@ -22,7 +23,7 @@ def generate_launch_description():
         DeclareLaunchArgument("object_z"),
         DeclareLaunchArgument("skill", default_value="pick_and_place"),
         DeclareLaunchArgument("pose_name", default_value=""),
-        DeclareLaunchArgument("scene_file", default_value=""),
+        DeclareLaunchArgument("scene_file"),
         DeclareLaunchArgument("fault_before_primitive", default_value=""),
     ]
     isaac_moveit_share = get_package_share_directory("isaac_moveit")
@@ -54,10 +55,7 @@ def generate_launch_description():
         if scene_file:
             with open(scene_file, encoding="utf-8") as stream:
                 scene = json.load(stream)
-            observed_parameters = {
-                "scene_" + item["object_id"]: item["position_m"]
-                for item in scene["objects"]
-            }
+            observed_parameters = execution_parameters(scene, LaunchConfiguration("target_id").perform(context))
         return [Node(
                 package="vgm_moveit_demo",
                 executable="safe_pick_and_place",

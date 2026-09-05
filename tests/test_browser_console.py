@@ -136,6 +136,30 @@ class BrowserTests(unittest.TestCase):
             with self.assertRaises((ValueError, wave.Error)):
                 validate_wav(value)
 
+    def test_typed_stop_variant_interrupts_busy_model_without_another_model_call(self):
+        entered, release = threading.Event(), threading.Event()
+        original = self.model.propose
+        def blocked(*args):
+            entered.set()
+            release.wait(2)
+            return original(*args)
+        with patch.object(self.model, 'propose', side_effect=blocked):
+            self.controller.prepare(transcript='Move red')
+            self.assertTrue(entered.wait(1))
+            self.controller.prepare(transcript='please stop the robot')
+            release.set()
+            self.assertEqual(self.settle()['status'], 'stopped')
+        self.assertEqual(self.model.calls, 1)
+        self.assertFalse(self.backend.executed)
+        self.assertIsNone(self.controller.task.pending)
+
+    def test_transcribed_abort_uses_controller_stop_path_without_model(self):
+        self.controller.transcribe = lambda *args: {'text': 'abort', 'confidence': .99}
+        self.controller.prepare(audio=audio())
+        self.assertEqual(self.settle()['status'], 'stopped')
+        self.assertEqual(self.model.calls, 0)
+        self.assertFalse(self.backend.executed)
+
     def test_http_origin_token_host_and_body_gates(self):
         server = make_server(self.controller, port=0)
         worker = threading.Thread(target=server.serve_forever, daemon=True)

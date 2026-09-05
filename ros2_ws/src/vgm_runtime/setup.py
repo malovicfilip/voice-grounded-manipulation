@@ -34,7 +34,7 @@ setup(
             ],
         ),
     ],
-    install_requires=["setuptools"],
+    install_requires=["setuptools", "jsonschema>=4.18,<5"],
     zip_safe=True,
     maintainer="malovicfilip",
     maintainer_email="malovicfilip1@gmail.com",

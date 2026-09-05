@@ -12,14 +12,7 @@
     "refuse"
   ],
   "allowed_named_poses": ["ready", "extended", "transport"],
-  "targets": {
-    "blue_target": {
-      "position_m": [0.0, 0.3, 0.75]
-    },
-    "yellow_target": {
-      "position_m": [0.0, -0.3, 0.75]
-    }
-  },
+  "scene_geometry_file": "phase_1_scene.json",
   "workspace_m": {
     "x": [-0.55, 0.55],
     "y": [-0.35, 0.35],
@@ -29,6 +22,13 @@
   "maximum_scene_age_s": 10.0,
   "maximum_object_drift_m": 0.01,
   "maximum_placement_error_m": 0.06,
+  "maximum_placement_z_error_m": 0.015,
+  "minimum_rest_observation_s": 0.5,
+  "maximum_rest_speed_m_s": 0.01,
+  "target_occupancy_clearance_m": 0.08,
+  "planning_time_s": 5.0,
+  "planning_attempts": 3,
+  "attached_object_clearance_m": 0.005,
   "maximum_execution_time_s": 120.0,
   "maximum_velocity_scale": 0.2,
   "maximum_acceleration_scale": 0.2,

@@ -9,6 +9,7 @@ from .audit import AuditLogger
 from .coordinator import TaskCoordinator
 from .types import GroundedScene, TaskPlan, ValidatedSkill
 from .validator import SkillValidationError, SkillValidator
+from .stop_intent import is_stop_request, stop_proposal
 
 
 class IntentModel(Protocol):
@@ -40,7 +41,7 @@ class IntentPipeline:
 
     def decide(self, transcript: str, scene: GroundedScene) -> PipelineDecision:
         try:
-            proposal = self.intent_model.propose(
+            proposal = stop_proposal() if is_stop_request(transcript) else self.intent_model.propose(
                 transcript, scene, self.validator.policy
             )
         except Exception as error:

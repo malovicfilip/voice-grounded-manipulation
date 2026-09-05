@@ -8,6 +8,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from .types import GroundedScene
+from .stop_intent import is_stop_request
 
 
 class RuleBasedIntentModel:
@@ -32,7 +33,7 @@ class RuleBasedIntentModel:
             "scene_revision": None,
         }
 
-        if re.search(r"\b(stop|halt|cancel|freeze)\b", text):
+        if is_stop_request(text):
             return {**base, "skill": "stop", "reason": "user requested stop"}
 
         pose_mentions = [
@@ -62,7 +63,7 @@ class RuleBasedIntentModel:
         ]
         target_mentions = [
             target_id
-            for target_id in sorted(policy["targets"])
+            for target_id in sorted(set(policy["targets"]) & set(scene.targets))
             if re.search(
                 rf"\b{re.escape(target_id.replace('_', ' '))}\b", text
             )

@@ -43,7 +43,7 @@ class MoveItDemoContractTest(unittest.TestCase):
         self.assertIn("MoveGroupInterface", source)
         self.assertIn('move_group.plan(plan)', source)
         self.assertIn('move_group.execute(plan)', source)
-        self.assertIn('{ "ready", "extended", "transport" }', source)
+        self.assertIn('kAllowedNamedPoses.count(target)', source)
         self.assertNotIn("create_publisher", source)
         self.assertNotIn("sensor_msgs", source)
         self.assertNotIn("trajectory_msgs", source)
@@ -51,8 +51,8 @@ class MoveItDemoContractTest(unittest.TestCase):
     def test_demo_caps_motion_and_pins_simulator(self):
         skill_source = SKILL_SOURCE.read_text(encoding="utf-8")
         launcher_source = DEMO_LAUNCHER.read_text(encoding="utf-8")
-        self.assertIn("kVelocityScale = 0.20", skill_source)
-        self.assertIn("kAccelerationScale = 0.20", skill_source)
+        self.assertIn('vgm_safety_config.hpp', skill_source)
+        self.assertIn('vgm_safety_config.hpp', skill_source)
         self.assertIn("nvcr.io/nvidia/isaac-sim:6.0.1", launcher_source)
         self.assertNotIn(" --publish ", launcher_source)
         self.assertNotIn(" -p ", launcher_source)
@@ -87,22 +87,22 @@ class MoveItDemoContractTest(unittest.TestCase):
         source = PICK_PLACE_SOURCE.read_text(encoding="utf-8")
         self.assertIn("MoveGroupInterface", source)
         self.assertIn("PlanningSceneInterface", source)
-        self.assertIn("kVelocityScale = 0.20", source)
-        self.assertIn("kAccelerationScale = 0.20", source)
-        self.assertIn("kExecutionDeadlineSeconds = 120.0", source)
-        self.assertIn("kAttachedObjectClearance = 0.005", source)
-        self.assertIn('"blue_target"', source)
-        self.assertIn('"yellow_target"', source)
+        self.assertIn('vgm_safety_config.hpp', source)
+        self.assertIn('vgm_safety_config.hpp', source)
+        self.assertIn('vgm_safety_config.hpp', source)
+        self.assertIn('vgm_safety_config.hpp', source)
+        self.assertIn('kAllowedTargets.count(target_id)', source)
         self.assertNotIn("create_publisher", source)
         self.assertNotIn("trajectory_msgs", source)
         self.assertNotIn("joint_trajectory", source)
         self.assertIn("timeout 130", VOICE_DEMO.read_text(encoding="utf-8"))
+        self.assertNotIn("CollisionObject::REMOVE", source)
         self.assertLess(
             source.index("arm_.detachObject(object_id)"),
-            source.index("CollisionObject::REMOVE"),
+            source.index("applyCollisionObject(placed_obstacle)"),
         )
         self.assertLess(
-            source.index("CollisionObject::REMOVE"),
+            source.index("applyCollisionObject(placed_obstacle)"),
             source.index('"place_retreat"'),
         )
 

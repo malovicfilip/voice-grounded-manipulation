@@ -8,7 +8,7 @@ The system turns a spoken manipulation request into a safe simulated action by a
 
 - **User interaction** — the WSL operator console accepts a transcript or WAV, shows the exact task for confirmation, handles clarification replies, and provides stop/recovery controls.
 - **Whisper speech-to-text** — uses local `faster-whisper` to convert an audio file to a transcript and refuses empty or low-confidence results.
-- **RGB-D perception and scene grounding** — synchronizes RGB and metric depth, identifies configured colored cubes, back-projects them into the world frame, and records object confidence, time, pixel support, and a stable scene revision.
+- **RGB-D perception and scene grounding** — synchronizes RGB and metric depth, estimates cube-center XYZ and target-marker support-surface XYZ in the world frame, and records confidence, time, pixel support, and a revision covering objects and targets. No measured object Z is replaced with tabletop height.
 - **LLM intent-to-skill interface** — asks `gpt-5.6-terra` for a strict-schema high-level skill or an ordered task of up to eight skills using only the transcript and allowlisted scene identifiers. API storage is disabled. The API call and key remain on the workstation.
 - **Skill validator and policy layer** — checks the exact schema, allowed skill/parameter combinations, replay protection, freshness, object confidence, workspace limits, and forbidden direct-control fields. It rejects anything invalid, ambiguous, unsupported, stale, or unsafe.
 - **Pre-execution gate** — obtains a fresh RGB-D scene, rejects changed object identities or holding state and more than 1 cm of measured object drift, and regenerates the deterministic plan. A hash change caused only by bounded sensor jitter can be rebound to the new capture; stale current evidence cannot authorize motion.
@@ -18,7 +18,7 @@ The system turns a spoken manipulation request into a safe simulated action by a
 - **ROS 2 Jazzy** — provides communication, lifecycle management, transforms, robot state, and telemetry between the system components.
 - **Isaac Sim** — hosts the simulated workspace, Franka Panda, sensors, physics, and simulation clock.
 - **Safe execution and Panda controller interface** — accepts only allowlisted identifiers and validator-derived coordinates, adds the table/cubes to the planning scene, caps motion scaling, enforces the deadline, executes approved MoveIt-generated trajectories, and reports state.
-- **Outcome validator and audit log** — requires final RGB-D evidence of the placed cube within target tolerance and records decisions without API keys, tokens, or raw audio.
+- **Outcome validator and audit log** — requires XY and Z agreement with the perceived target, no attached object, and two separated RGB-D observations consistent with rest. Decisions are recorded without API keys, tokens, or raw audio.
 
 ## Data flow
 
@@ -58,10 +58,10 @@ Only the deterministic validation and execution path may authorize motion:
 1. The validator accepts an allowed skill with complete, safe parameters.
 2. Perception grounds referenced objects and confirms required confidence and scene conditions.
 3. A second capture rejects stale state or measured scene drift immediately before execution.
-4. The coordinator expands the skill using policy-owned positions and offsets.
+4. The coordinator expands the skill using measured object/target positions and policy-owned offsets.
 5. MoveIt 2 applies configured kinematic, collision, and trajectory constraints.
 6. The controller interface executes the approved trajectory and reports the result.
-7. A final RGB-D capture confirms the expected placement outcome.
+7. Two fresh RGB-D captures and attached-object state verify the placement outcome.
 
 Any failed validation, missing grounding, unsafe condition, planning failure,
 execution fault, timeout, or failed outcome check makes the run fail closed.
@@ -73,21 +73,46 @@ accepted.
 The versioned schema allows `move_named_pose`, `open_gripper`, `close_gripper`,
 `pick`, `place`, `pick_and_place`, `inspect`, `stop`, and `refuse`. Each skill has one
 exact field combination. Grounded skills must copy the current scene revision
-and use observed object IDs plus configured target IDs. Named poses are limited
+and use observed object and target IDs from the configured allowlists. Named poses are limited
 to `ready`, `extended`, and `transport`.
 
 The schema intentionally has no coordinate or control fields, sets
-`additionalProperties` to false, and is duplicated by deterministic semantic
-checks. Recursive forbidden-field detection rejects joints, velocities, motors,
+`additionalProperties` to false, and is executed directly with JSON Schema
+Draft 2020-12 before semantic or robot-state checks. Task-step syntax is derived
+from the same schema, not maintained as an independent set of combinations.
+Recursive forbidden-field diagnostics identify joints, velocities, motors,
 efforts, torques, and trajectories even if a malformed producer tries to nest
 them. Only the validator can mint the in-process `ValidatedSkill` type required
 by coordination.
 
 The reusable executor supports separate `pick` and `place` skills as well as
-`pick_and_place`, named poses, and empty-gripper operations. `inspect` returns a
+`pick_and_place`, named poses, and opening an empty gripper. Standalone
+`close_gripper` remains syntactically defined but is semantically refused:
+closing around an object requires a validated pick sequence. Opening while
+holding, another pick, or a named-pose motion while carrying are refused in
+`SkillValidator` and checked again downstream. `inspect` returns a
 fresh observed object without requesting motion. MoveIt's attached-object state
 supplies logical holding information when a grasped cube is occluded. A final
-camera observation remains mandatory for successful placement.
+two-frame camera observation remains mandatory for successful placement.
+
+STOP/cancel/abort/halt phrases take a deterministic cancellation path before
+model invocation, capture, task-state checks, or confirmation. The browser's
+STOP button remains the quickest control during an in-flight operation; speech
+still requires recording/transcription. This is software cancellation, not a
+hardware-certified emergency stop. Clarification state stores the original
+request and bounded question/answer turns, never recursively wrapped prompts.
+
+`config/safety_policy.json` is the canonical safety policy; object dimensions,
+target identities and table geometry are authored once in its referenced scene
+file. Runtime target poses are never read from authored spawn positions. CMake
+generates C++ constants from that effective policy. The executor checks a policy
+digest against the Python launch configuration and refuses mismatched builds.
+Released objects remain in the collision world through retreat; a conservative
+world-aligned box covers the transformed release pose and settling to the
+measured target support height. No release-time world-object removal is allowed.
+
+See [safety hardening validation](safety_hardening.md) for offline evidence and
+the required simulator deployment checks before using the revised executor.
 
 `/vgm/stop` cancels through MoveIt and inhibits subsequent primitives. A wall-time
 watchdog can cancel during a blocking motion, not only between primitives.

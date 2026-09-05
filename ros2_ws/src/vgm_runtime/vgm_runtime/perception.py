@@ -12,7 +12,7 @@ from typing import Any
 
 import numpy as np
 
-from .types import GroundedScene, ObjectObservation
+from .types import GroundedScene, ObjectObservation, TargetObservation
 
 
 def _connected_components(mask: np.ndarray) -> list[tuple[np.ndarray, np.ndarray]]:
@@ -79,17 +79,12 @@ class ColorDepthGrounder:
             cube["object_id"]: tuple(float(value) for value in cube["position"])
             for cube in scene_config["cubes"]
         }
-        surface_height = float(scene_config["table"]["surface_height_m"])
-        self._object_center_z = {
-            cube["object_id"]: surface_height + float(cube["size_m"]) / 2.0
-            for cube in scene_config["cubes"]
-        }
         self._object_sizes = {
             cube["object_id"]: float(cube["size_m"])
             for cube in scene_config["cubes"]
         }
         self._reference_colors = np.asarray(
-            [cube["color_rgb"] for cube in scene_config["cubes"]], dtype=np.float32
+            [item["color_rgb"] for item in (*scene_config["cubes"], *scene_config.get("targets", []))], dtype=np.float32
         )
 
     def ground(
@@ -123,6 +118,15 @@ class ColorDepthGrounder:
             colors[:, :, None, :] - self._reference_colors[None, None, :, :],
             axis=3,
         )
+        # USD display colors are linear; RTX RGB may be display-transformed.
+        # Keep both color encodings as appearance cues, never pose evidence.
+        marker_colors = self._reference_colors[len(self._object_ids):]
+        if len(marker_colors):
+            srgb = np.where(marker_colors <= .0031308, 12.92 * marker_colors,
+                            1.055 * marker_colors ** (1 / 2.4) - .055)
+            distances[:, :, len(self._object_ids):] = np.minimum(
+                distances[:, :, len(self._object_ids):],
+                np.linalg.norm(colors[:, :, None, :] - srgb[None, None, :, :], axis=3))
         nearest = np.argmin(distances, axis=2)
         nearest_distance = np.min(distances, axis=2)
         finite_depth = np.isfinite(depth_array) & (depth_array > 0.0)
@@ -169,7 +173,7 @@ class ColorDepthGrounder:
                 )
                 if center is None:
                     continue
-                position = (center[0], center[1], self._object_center_z[object_id])
+                position = center
                 location_error = math.hypot(
                     position[0] - expected[0], position[1] - expected[1]
                 )
@@ -216,6 +220,8 @@ class ColorDepthGrounder:
                 pixel_count=int(pixel_count),
             )
 
+        targets = self._ground_targets(colors, finite_depth,
+                                       depth_array, intrinsics, transform, timestamp)
         revision_payload = [
             {
                 "object_id": object_id,
@@ -229,6 +235,9 @@ class ColorDepthGrounder:
             }
             for object_id in sorted(observations)
         ]
+        revision_payload.extend({"target_id": key, "position_bin_1cm":
+                                 [int(round(v / 0.01)) for v in targets[key].position_m]}
+                                for key in sorted(targets))
         revision = hashlib.sha256(
             json.dumps(revision_payload, sort_keys=True, separators=(",", ":")).encode()
         ).hexdigest()[:16]
@@ -236,6 +245,7 @@ class ColorDepthGrounder:
             revision=revision,
             captured_at_s=timestamp,
             objects=observations,
+            targets=targets,
         )
 
     @staticmethod
@@ -268,4 +278,86 @@ class ColorDepthGrounder:
                 center.append(float((bounds[0, axis] + bounds[1, axis]) / 2))
             else:
                 return None
+        z_bounds = np.quantile(points[:, 2], [.05, .95])
+        if height_span > size * 1.6:
+            return None
+        if height_span <= size * .15:
+            # Horizontal visible face: half-size toward the cube interior.
+            face = float(np.median(points[:, 2]))
+            direction = float(np.sign(face - camera_origin[2]))
+            if direction == 0:
+                return None
+            center.append(face + direction * size / 2)
+        elif height_span >= size * .8:
+            center.append(float((z_bounds[0] + z_bounds[1]) / 2))
+        else:
+            # A clipped side cannot establish height without a supported top.
+            top = float(np.quantile(points[:, 2], .95))
+            if camera_origin[2] <= top or np.mean(np.abs(points[:, 2] - top) < size * .05) < .15:
+                return None
+            center.append(top - size / 2)
         return tuple(center)
+
+    def _ground_targets(self, colors, valid_depth, depth, intrinsics, transform, timestamp):
+        """Fit a horizontal circular marker from measured RGB-D only.
+
+        Color identifies the ID; radius/planarity distinguish markers from
+        cubes and background. Circle fitting tolerates a centrally occluding
+        placed cube. Incomplete or ambiguous observations fail closed.
+        No authored target XYZ is consulted.
+        """
+        targets = {}
+        for index, spec in enumerate(self.scene_config.get("targets", []), len(self._object_ids)):
+            reference = self._reference_colors[index]
+            srgb = np.where(reference <= .0031308, 12.92 * reference, 1.055 * reference ** (1 / 2.4) - .055)
+            chroma = colors / np.maximum(colors.sum(axis=2, keepdims=True), 1e-9)
+            chroma_error = np.minimum(np.linalg.norm(chroma - reference / reference.sum(), axis=2),
+                                     np.linalg.norm(chroma - srgb / srgb.sum(), axis=2))
+            appearance_error = np.minimum(np.linalg.norm(colors-reference, axis=2), np.linalg.norm(colors-srgb, axis=2))
+            mask = (chroma_error <= .14) & (appearance_error <= self.color_distance_threshold) & valid_depth
+            candidates = []
+            for rows, cols in _connected_components(mask):
+                if rows.size < self.minimum_pixels * 4:
+                    continue
+                d = depth[rows, cols]
+                camera = np.array([(cols-intrinsics.cx)*d/intrinsics.fx,
+                                   (rows-intrinsics.cy)*d/intrinsics.fy, d, np.ones_like(d)])
+                world = transform @ camera
+                points = (world[:3] / world[3]).T
+                if not np.isfinite(points).all():
+                    continue
+                z = float(np.median(points[:, 2]))
+                if np.quantile(np.abs(points[:, 2] - z), .95) > .004:
+                    continue
+                # Outer boundary per angular sector; a missing center is OK,
+                # a missing side isn't. Fit twice to refine the initial center.
+                xy = points[:, :2]
+                center = (np.min(xy, axis=0) + np.max(xy, axis=0)) / 2
+                boundary = None
+                for _ in range(2):
+                    delta = xy - center
+                    sector = np.floor((np.arctan2(delta[:, 1], delta[:, 0]) + np.pi) * 24 / (2*np.pi)).astype(int) % 24
+                    if len(np.unique(sector)) < 22:
+                        boundary = None
+                        break
+                    boundary = np.array([xy[indices[np.argmax(np.linalg.norm(delta[indices], axis=1))]]
+                                         for part in np.unique(sector)
+                                         for indices in (np.flatnonzero(sector == part),)])
+                    matrix = np.column_stack((2*boundary, np.ones(len(boundary))))
+                    fit, _, rank, _ = np.linalg.lstsq(matrix, np.sum(boundary**2, axis=1), rcond=None)
+                    if rank != 3:
+                        boundary = None
+                        break
+                    center = fit[:2]
+                if boundary is None:
+                    continue
+                radii = np.linalg.norm(boundary-center, axis=1)
+                radius = float(np.median(radii))
+                if abs(radius-spec["radius_m"]) > spec["radius_m"]*.15 or np.max(np.abs(radii-radius)) > .008:
+                    continue
+                score = .8 + .2 * max(0., 1. - float(np.mean(appearance_error[rows, cols])) / self.color_distance_threshold)
+                candidates.append(TargetObservation(spec["target_id"], (float(center[0]), float(center[1]), z),
+                                                     score, timestamp, pixel_count=int(rows.size)))
+            if len(candidates) == 1:
+                targets[spec["target_id"]] = candidates[0]
+        return targets

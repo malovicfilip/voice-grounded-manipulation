@@ -17,6 +17,7 @@ import subprocess
 import sys
 import time
 import uuid
+from dataclasses import replace
 from pathlib import Path
 
 from .config import load_json_config
@@ -80,6 +81,7 @@ def robot_state(*, cancel: bool = False) -> dict:
         if len(held) > 1:
             raise RuntimeError("unexpected multiple attached objects")
         return {"positions": samples[-1][1], "drift_rad": drift,
+                "observed_at_s": time.time(),
                 "stationary": math.isfinite(drift) and drift <= 0.01,
                 "held_object_id": held[0] if held else None, "stop_applied": bool(stop_applied)}
     finally:
@@ -115,7 +117,7 @@ class SimulatorSession:
                 raise RuntimeError("RGB-D capture timed out")
             time.sleep(0.1)
         scene = load_scene(self.directory / (prefix + "_grounded_scene.json"))
-        return GroundedScene(scene.revision, scene.captured_at_s, scene.objects, state["held_object_id"])
+        return replace(scene, held_object_id=state["held_object_id"])
 
     def stop(self):
         (self.directory / "stopped").touch()
@@ -176,15 +178,17 @@ class SimulatorSession:
             # their last verified destination, never revert a moved cube to its spawn.
             collision_objects = {
                 cube["object_id"]: {"object_id": cube["object_id"], "position_m": cube["position"]}
-                for cube in load_json_config("phase_1_scene.json")["cubes"]
+                for cube in load_json_config(self.policy["scene_geometry_file"])["cubes"]
             }
             for object_id, position in state["expected_positions"].items():
                 collision_objects[object_id]["position_m"] = position
             for observation in scene.objects.values():
                 collision_objects[observation.object_id] = observation.to_mapping()
-            write_json(scene_path, {"objects": list(collision_objects.values())})
+            write_json(scene_path, {**scene.to_mapping(), "collision_objects": list(collision_objects.values())})
             write_json(work / "proposal.json", proposal)
-            xyz = selected.position_m if selected and proposal["skill"] != "place" else (0.0, 0.0, 0.775)
+            # Place uses the measured target and attached state, not a fabricated
+            # object position. These unused launch slots remain zero.
+            xyz = selected.position_m if selected and proposal["skill"] != "place" else (0.0, 0.0, 0.0)
             command = ["ros2", "launch", "vgm_moveit_demo", "safe_pick_and_place.launch.py",
                        f"request_id:={request_id}", f"skill:={proposal['skill']}",
                        f"scene_file:={scene_path}",
@@ -216,15 +220,21 @@ class SimulatorSession:
                     raise RuntimeError("MoveIt skill failed or was cancelled")
                 result = {"status": "succeeded", "skill": proposal["skill"], "request_id": request_id}
                 if proposal["skill"] in {"place", "pick_and_place"}:
-                    target = self.policy["targets"][proposal["target_id"]]["position_m"]
+                    target = scene.targets[proposal["target_id"]].position_m
                     hints = dict(state["expected_positions"])
-                    hints[proposal["object_id"]] = [target[0], target[1], target[2] + 0.025]
+                    hints[proposal["object_id"]] = [target[0], target[1], target[2] + self.policy["objects"][proposal["object_id"]]["size_m"] / 2]
                     time.sleep(0.6)
+                    previous_scene = self.capture(hints)
+                    write_json(work / "rest_start_scene.json", previous_scene.to_mapping())
+                    time.sleep(self.policy["minimum_rest_observation_s"])
                     final_scene = self.capture(hints)
                     # Preserve refused outcomes too; failure evidence must not
                     # disappear merely because the confidence/error gate fails.
                     write_json(work / "final_scene.json", final_scene.to_mapping())
-                    result["outcome"] = validate_placement_outcome({"validated_skill": proposal}, final_scene, self.policy)
+                    result["outcome"] = validate_placement_outcome(
+                        {"validated_skill": proposal, "target_position_m": target}, final_scene,
+                        self.policy, previous_scene=previous_scene)
+                    hints[proposal["object_id"]] = list(final_scene.objects[proposal["object_id"]].position_m)
                     state["expected_positions"] = hints
                     write_json(self.directory / "session_state.json", state)
                 write_json(work / "result.json", result)

@@ -28,20 +28,39 @@ class ObjectObservation:
 
 
 @dataclass(frozen=True, slots=True)
+class TargetObservation:
+    """Measured center of the target's support surface in world coordinates."""
+    target_id: str
+    position_m: tuple[float, float, float]
+    confidence: float
+    observed_at_s: float
+    frame_id: str = "world"
+    pixel_count: int = 0
+
+    def to_mapping(self) -> dict[str, Any]:
+        return {name: (list(value) if name == "position_m" else value)
+                for name in self.__dataclass_fields__
+                for value in (getattr(self, name),)}
+
+
+@dataclass(frozen=True, slots=True)
 class GroundedScene:
     revision: str
     captured_at_s: float
     objects: Mapping[str, ObjectObservation] = field(default_factory=dict)
     held_object_id: str | None = None
+    targets: Mapping[str, TargetObservation] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "objects", MappingProxyType(dict(self.objects)))
+        object.__setattr__(self, "targets", MappingProxyType(dict(self.targets)))
 
     def to_mapping(self) -> dict[str, Any]:
         return {
             "revision": self.revision,
             "captured_at_s": self.captured_at_s,
             "held_object_id": self.held_object_id,
+            "targets": [self.targets[key].to_mapping() for key in sorted(self.targets)],
             "objects": [
                 self.objects[object_id].to_mapping()
                 for object_id in sorted(self.objects)

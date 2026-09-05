@@ -18,6 +18,7 @@ from vgm_runtime.serialization import scene_from_mapping
 from vgm_runtime.execution_gate import rebind_after_capture
 from vgm_runtime.types import GroundedScene, ObjectObservation
 from vgm_runtime.validator import SkillValidationError, SkillValidator
+from scene_fixtures import targets
 
 
 def step(skill, object_id=None, target_id=None, pose_name=None, reason=None):
@@ -48,7 +49,7 @@ class Backend:
         return GroundedScene("0123456789abcdef", now, {
             key: ObjectObservation(key, value, .98, now, pixel_count=100)
             for key, value in self.positions.items() if key != self.held
-        }, self.held)
+        }, self.held, targets(now))
     def execute(self, proposal, scene):
         self.executed.append(proposal)
         if self.fail_at == len(self.executed):
@@ -100,7 +101,7 @@ class TaskTests(unittest.TestCase):
         self.assertFalse(self.backend.executed)
         session.model.steps = [step("pick_and_place", "red_cube", "blue_target")]
         self.assertEqual(self.run_task(session)["status"], "completed")
-        self.assertIn("Original request: move it", session.model.transcripts[-1])
+        self.assertEqual(json.loads(session.model.transcripts[-1])["original_request"], "move it")
     def test_unpaired_pick_and_place_without_holding_are_refused(self):
         for steps in ([step("pick", "red_cube")], [step("place", "red_cube", "blue_target")]):
             session = self.session(steps)

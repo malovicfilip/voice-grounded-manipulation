@@ -233,6 +233,7 @@ def main() -> int:
     initial_captured = False
     verification_captured = False
     final_settle_frames = 0
+    rest_started_at = None
     processed_captures = set()
     while simulation_app.is_running():
         simulation_app.update()
@@ -307,19 +308,24 @@ def main() -> int:
                     for item in config["cubes"]
                     if item["object_id"] == outcome["object_id"]
                 )
-                target = next(
-                    item
-                    for item in config["targets"]
-                    if item["target_id"] == outcome["target_id"]
-                )
+                observed = json.loads((output_directory / "verification_grounded_scene.json").read_text())
+                target = next(item for item in observed["targets"] if item["target_id"] == outcome["target_id"])
                 expected_positions = {
                     cube["object_id"]: (
-                        float(target["position"][0]),
-                        float(target["position"][1]),
-                        float(config["table"]["surface_height_m"])
+                        float(target["position_m"][0]),
+                        float(target["position_m"][1]),
+                        float(target["position_m"][2])
                         + float(cube["size_m"]) / 2.0,
                     )
                 }
+                if rest_started_at is None:
+                    _capture_rgbd("rest_start", rgb, depth, output_directory, grounder,
+                                  intrinsics, camera_to_world, expected_positions)
+                    rest_started_at = time.monotonic()
+                    continue
+                from vgm_runtime.config import load_json_config
+                if time.monotonic() - rest_started_at < load_json_config("safety_policy.json")["minimum_rest_observation_s"]:
+                    continue
                 _capture_rgbd(
                     "final", rgb, depth, output_directory, grounder,
                     intrinsics, camera_to_world, expected_positions,

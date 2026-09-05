@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 from pathlib import Path
 from typing import Any
@@ -36,4 +37,17 @@ def load_json_config(name: str) -> dict[str, Any]:
         value = json.load(config_file)
     if not isinstance(value, dict):
         raise ValueError(f"configuration must contain an object: {path}")
+    if name == "safety_policy.json":
+        geometry = load_json_config(value["scene_geometry_file"])
+        # Author geometry once. Spawn poses are NOT runtime target grounding.
+        value["objects"] = {item["object_id"]: {"size_m": item["size_m"]}
+                            for item in geometry["cubes"]}
+        value["targets"] = {item["target_id"]: {"radius_m": item["radius_m"]}
+                            for item in geometry["targets"]}
+        value["table"] = geometry["table"]["top"]
     return value
+
+
+def policy_digest(policy: dict[str, Any]) -> str:
+    return hashlib.sha256(json.dumps(policy, sort_keys=True, separators=(",", ":"),
+                                     allow_nan=False).encode()).hexdigest()
