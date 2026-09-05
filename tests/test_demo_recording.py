@@ -38,6 +38,26 @@ class RecordingTests(unittest.TestCase):
             recorder.update(None, 1)
             self.assertTrue(recorder.finished)
 
+    def test_byte_limit_and_no_restart(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "recording.start").touch()
+            recorder = module.DemoRecording(root, max_bytes=1)
+            recorder.update(np.zeros((8, 8, 3), dtype=np.uint8), 0)
+            recorder.update(None, 1)
+            recorder.update(np.ones((8, 8, 3)), 2)
+            self.assertEqual(len(recorder.frames), 1)
+            value = json.loads((root / "recording/recording.json").read_text())
+            self.assertEqual(value["status"], "limit")
+
+    def test_refuses_existing_frame_directory(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "recording.start").touch()
+            (root / "recording").mkdir()
+            with self.assertRaises(FileExistsError):
+                module.DemoRecording(root).update(None, 0)
+
 
 if __name__ == "__main__":
     unittest.main()
