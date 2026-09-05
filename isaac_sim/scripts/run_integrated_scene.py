@@ -55,6 +55,9 @@ from build_phase_1_scene import (  # noqa: E402
     _validate_contract,
 )
 from vgm_runtime.perception import CameraIntrinsics, ColorDepthGrounder  # noqa: E402
+from demo_recording import DemoRecording  # noqa: E402
+
+recorder = None
 
 
 def _create_ros_action_graph(robot_prim_path: str) -> None:
@@ -184,8 +187,10 @@ def _capture_rgbd(
 
 
 def main() -> int:
+    global recorder
     output_directory = args.output_directory.resolve()
     output_directory.mkdir(parents=True, exist_ok=True)
+    recorder = DemoRecording(output_directory)
     config_path = (args.config or DEFAULT_CONFIG).resolve()
     config = _load_config(config_path)
     _validate_contract(config)
@@ -222,6 +227,7 @@ def main() -> int:
         rgb_data, _ = camera_sensor.get_data("rgb")
         depth_data, _ = camera_sensor.get_data("distance_to_image_plane")
         rgb = _tensor_to_numpy(rgb_data)
+        recorder.update(rgb)
         depth = _tensor_to_numpy(depth_data)
         if depth is not None:
             depth = np.asarray(depth, dtype=np.float32).squeeze()
@@ -332,4 +338,6 @@ except BaseException:
 
     traceback.print_exc()
 finally:
+    if recorder is not None:
+        recorder.finish()
     simulation_app.close(skip_cleanup=True, exit_code=exit_code)
