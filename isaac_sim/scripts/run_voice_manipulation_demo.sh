@@ -10,9 +10,14 @@ TRANSCRIPT=""
 AUDIO_PATH=""
 PROVIDER="openai"
 SESSION=false
+STREAM_ARGS=()
 RUN_ID="voice-demo-$(date -u +%Y%m%dT%H%M%SZ)"
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --stream-host)
+      STREAM_ARGS=(--stream-host "${2:?Provide the server IPv4 address}")
+      shift 2
+      ;;
     --session)
       SESSION=true
       shift
@@ -140,6 +145,7 @@ ISAAC_VOLUMES=(
 )
 
 docker run --rm --name "${CONTAINER_NAME}" --gpus all --network=host \
+  -e NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics,video,display \
   -e ACCEPT_EULA=Y -e PYTHONUNBUFFERED=1 \
   -e ROS_DISTRO=jazzy -e ROS_DOMAIN_ID=0 \
   -e RMW_IMPLEMENTATION=rmw_fastrtps_cpp \
@@ -149,6 +155,7 @@ docker run --rm --name "${CONTAINER_NAME}" --gpus all --network=host \
   -w /workspace --entrypoint /isaac-sim/python.sh \
   "${IMAGE}" -u /workspace/isaac_sim/scripts/run_integrated_scene.py \
   --headless --output-directory "${CONTAINER_OUTPUT}" \
+  "${STREAM_ARGS[@]}" \
   >"${HOST_OUTPUT}/isaac.log" 2>&1 &
 ISAAC_PID=$!
 

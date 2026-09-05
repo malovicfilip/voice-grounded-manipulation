@@ -7,6 +7,7 @@ captures synchronized RGB-D evidence on explicit file-based requests.
 """
 
 import argparse
+import ipaddress
 import json
 import re
 import sys
@@ -28,6 +29,8 @@ def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path)
     parser.add_argument("--headless", action="store_true")
+    parser.add_argument("--stream-host", type=ipaddress.IPv4Address,
+                        help="Enable WebRTC with this advertised server IPv4 address")
     parser.add_argument("--max-frames", type=int, default=0)
     parser.add_argument("--output-directory", type=Path, required=True)
     args, _ = parser.parse_known_args()
@@ -38,7 +41,9 @@ def _parse_args() -> argparse.Namespace:
 
 args = _parse_args()
 simulation_app = SimulationApp(
-    {"renderer": "RealTimePathTracing", "headless": args.headless}
+    {"renderer": "RealTimePathTracing", "headless": args.headless,
+     **({"hide_ui": False, "width": 1280, "height": 720,
+         "window_width": 1280, "window_height": 720} if args.stream_host else {})}
 )
 
 import isaacsim.core.experimental.utils.app as app_utils  # noqa: E402
@@ -196,6 +201,14 @@ def main() -> int:
     _validate_contract(config)
 
     app_utils.enable_extension("isaacsim.ros2.bridge")
+    if args.stream_host:
+        # NVIDIA's 6.0.1 standalone livestream example uses this extension.
+        simulation_app.set_setting("/app/window/drawMouse", True)
+        base = "/exts/omni.kit.livestream.app/primaryStream/"
+        simulation_app.set_setting(base + "publicIp", str(args.stream_host))
+        simulation_app.set_setting(base + "signalPort", 49100)
+        simulation_app.set_setting(base + "streamPort", 47998)
+        app_utils.enable_extension("omni.kit.livestream.app")
     simulation_app.update()
     stage, camera_sensor = _author_scene(config)
     robot_path = config["robot"]["prim_path"]
