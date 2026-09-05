@@ -49,12 +49,18 @@ def main():
             "sequence": "Multi-step: inspect, pick, place on yellow, inspect",
         }
         chapters = []
+        previous_pass = None
         for event in events:
+            if event["text"].startswith("PASS "):
+                previous_pass = event["elapsed_s"]
             match = re.fullmatch(r"Running (\w+) acceptance", event["text"])
             if match and match[1] in titles:
-                chapters.append((event["elapsed_s"], titles[match[1]]))
+                # Suites run consecutively. The preceding PASS marks the
+                # transition even in older, line-buffered capture timelines.
+                start = previous_pass if previous_pass is not None else event["elapsed_s"]
+                chapters.append((start, titles[match[1]]))
                 if match[1] == "voice":
-                    voice_start = event["elapsed_s"]
+                    voice_start = start
         def timestamp(seconds):
             milliseconds = max(0, round(seconds * 1000))
             seconds, milliseconds = divmod(milliseconds, 1000)

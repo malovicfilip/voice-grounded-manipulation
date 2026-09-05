@@ -1,5 +1,22 @@
 # Record the simulation demo
 
+## Verified recording: September 4, 2026
+
+Session `full-demo-video-v1` completed all six live acceptance suites. Its
+308.72-second recording contains 2,333 actual camera frames (640 x 480).
+`isaac_sim/_output/full-demo-video-v1/full-demo.mp4` is a 5,790,450-byte H.264/AAC
+MP4 with phase captions and explicitly labeled synthetic input audio replay.
+The complete file was decoded successfully and copied to Windows Downloads as
+`voice-grounded-manipulation-full-demo-2026-09-04.mp4`; both copies have SHA-256
+`184f7b9f7f997945942d0c3ed8f88143ff262000561bcdadbff489cdfc0ba6c2`.
+
+The original frames, capture timestamps, acceptance report, and raw timeline
+are retained locally in the ignored session directory. The fixed camera shows
+the tabletop work area; part of the raised arm is outside its view. This is a
+complete real-time camera recording, not a recording of the Isaac Sim editor.
+
+## Recording workflow
+
 The integrated scene supports opt-in recording from its existing RGB-D camera.
 It records real rendered frames, not reconstructed motion or generated video.
 The LLM still emits only validated high-level skills; recording never commands
