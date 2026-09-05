@@ -134,13 +134,39 @@ class PerceptionGroundingTest(unittest.TestCase):
         transform = np.eye(4)
         transform[0, 3], transform[1, 3] = -.1, -.18
         scene = ColorDepthGrounder(self.config, minimum_pixels=4).ground(
-            rgb, depth, CameraIntrinsics(1000.0, 1000.0, 17.5, 17.5),
+            rgb, depth, CameraIntrinsics(180.0, 180.0, 17.5, 17.5),
             transform, captured_at_s=1.0,
         )
         observation = scene.objects["red_cube"]
         self.assertEqual(observation.pixel_count, 36)
-        self.assertGreater(observation.confidence, .95)
-        self.assertAlmostEqual(observation.position_m[0], -.093)
+        self.assertGreater(observation.confidence, .85)
+        self.assertAlmostEqual(observation.position_m[0], -.1 + 7 / 180)
+
+    def test_front_face_is_converted_to_measured_cube_center_not_surface_or_hint(self):
+        grid = np.linspace(-.025, .025, 11)
+        points = np.array([[x + .007, .277, z + .775] for x in grid for z in grid])
+        center = ColorDepthGrounder._cube_surface_center(points, np.array([.35, -1.1, 1.35]), .05)
+        self.assertAlmostEqual(center[0], .007)
+        self.assertAlmostEqual(center[1], .302)
+        # The same geometric rule works from the opposite camera side.
+        opposite = ColorDepthGrounder._cube_surface_center(points, np.array([.35, 1.1, 1.35]), .05)
+        self.assertAlmostEqual(opposite[1], .252)
+
+    def test_top_face_uses_observed_extents_and_partial_fragments_are_refused(self):
+        grid = np.linspace(-.025, .025, 11)
+        points = np.array([[x + .1, y - .18, .8] for x in grid for y in grid])
+        center = ColorDepthGrounder._cube_surface_center(points, np.array([.35, -1.1, 1.35]), .05)
+        self.assertAlmostEqual(center[0], .1)
+        self.assertAlmostEqual(center[1], -.18)
+        self.assertIsNone(ColorDepthGrounder._cube_surface_center(points[:8], np.array([.35, -1.1, 1.35]), .05))
+
+    def test_dominant_front_plane_is_not_biased_by_a_small_visible_top_face(self):
+        grid = np.linspace(-.025, .025, 11)
+        front = [[x + .007, .277, z + .775] for x in grid for z in grid]
+        top = [[x + .007, y, .8] for x in grid[::2] for y in np.linspace(.282, .327, 5)]
+        center = ColorDepthGrounder._cube_surface_center(np.array(front + top), np.array([.35, -1.1, 1.35]), .05)
+        self.assertAlmostEqual(center[0], .007)
+        self.assertAlmostEqual(center[1], .302)
 
     def test_expected_position_can_ground_a_relocated_object(self):
         red = np.array([204, 13, 13], dtype=np.uint8)

@@ -84,6 +84,10 @@ class ColorDepthGrounder:
             cube["object_id"]: surface_height + float(cube["size_m"]) / 2.0
             for cube in scene_config["cubes"]
         }
+        self._object_sizes = {
+            cube["object_id"]: float(cube["size_m"])
+            for cube in scene_config["cubes"]
+        }
         self._reference_colors = np.asarray(
             [cube["color_rgb"] for cube in scene_config["cubes"]], dtype=np.float32
         )
@@ -147,28 +151,25 @@ class ColorDepthGrounder:
                     continue
                 object_depths = depth_array[rows, columns]
                 median_depth = float(np.median(object_depths))
-                median_row = float(np.median(rows))
-                median_column = float(np.median(columns))
-                camera_point = np.array(
+                camera_points = np.array(
                     [
-                        (median_column - intrinsics.cx) * median_depth / intrinsics.fx,
-                        (median_row - intrinsics.cy) * median_depth / intrinsics.fy,
-                        median_depth,
-                        1.0,
+                        (columns - intrinsics.cx) * object_depths / intrinsics.fx,
+                        (rows - intrinsics.cy) * object_depths / intrinsics.fy,
+                        object_depths,
+                        np.ones_like(object_depths),
                     ],
                     dtype=np.float64,
                 )
-                world_point = transform @ camera_point
-                if not np.isfinite(world_point[:3]).all() or abs(world_point[3]) < 1e-9:
+                world_points = transform @ camera_points
+                if not np.isfinite(world_points).all() or np.any(np.abs(world_points[3]) < 1e-9):
                     continue
-                projected = [
-                    float(value / world_point[3]) for value in world_point[:3]
-                ]
-                position = (
-                    projected[0],
-                    projected[1],
-                    self._object_center_z[object_id],
+                points = (world_points[:3] / world_points[3]).T
+                center = self._cube_surface_center(
+                    points, transform[:3, 3], self._object_sizes[object_id]
                 )
+                if center is None:
+                    continue
+                position = (center[0], center[1], self._object_center_z[object_id])
                 location_error = math.hypot(
                     position[0] - expected[0], position[1] - expected[1]
                 )
@@ -236,3 +237,35 @@ class ColorDepthGrounder:
             captured_at_s=timestamp,
             objects=observations,
         )
+
+    @staticmethod
+    def _cube_surface_center(points, camera_origin, size):
+        """Fit the configured upright cube's center from visible surface points.
+
+        A front-face median is a surface point, not a grasp center. A supported
+        face spans a cube width along one horizontal axis and is nearly planar
+        along the other; move half a known cube width away from the camera on
+        that planar axis. Full top-face extents use their measured midpoint.
+        Partial/ambiguous silhouettes are refused instead of snapped to hints.
+        """
+        bounds = np.quantile(points[:, :2], [.05, .95], axis=0)
+        spans = bounds[1] - bounds[0]
+        height_span = float(np.diff(np.quantile(points[:, 2], [.05, .95]))[0])
+        if np.any(spans > size * 1.6) or not np.any(spans >= size * .5):
+            return None
+        center = []
+        for axis in range(2):
+            face = float(np.median(points[:, axis]))
+            face_support = float(np.mean(np.abs(points[:, axis] - face) <= size * .05))
+            if face_support >= .6 and height_span >= size * .4:
+                # Other visible faces can widen the extrema while a majority
+                # still lies on one near-facing vertical plane.
+                direction = float(np.sign(face - camera_origin[axis]))
+                if direction == 0:
+                    return None
+                center.append(face + direction * size / 2)
+            elif spans[axis] >= size * .5:
+                center.append(float((bounds[0, axis] + bounds[1, axis]) / 2))
+            else:
+                return None
+        return tuple(center)
