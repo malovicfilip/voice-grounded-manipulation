@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "scope": "Configured six-cube Franka Panda simulation milestone; no physical hardware certification",
+  "status": "passed",
+  "runtime_commit": "32eda8670fea9f79893b6df6358799f6545393a8",
+  "repository_commit_at_campaign": "49d179591aa61eb6d5fc76f1404e3fb70da6baea",
+  "session": "all-phases-v3",
+  "started_utc": "2026-09-05T00:09:17.853652Z",
+  "finished_utc": "2026-09-05T00:14:44.153103Z",
+  "environment": {
+    "isaac_sim": "6.0.1",
+    "ros2": "Jazzy",
+    "motion_planner": "MoveIt 2",
+    "robot": "Franka Panda",
+    "gpu": "NVIDIA L4",
+    "speech_model": "faster-whisper small.en CPU/int8",
+    "intent_model": "gpt-5.6-terra",
+    "api_key_location": "WSL only"
+  },
+  "offline_tests": {"passed": 94, "failed": 0},
+  "ros_build": {"vgm_moveit_demo": "passed", "vgm_runtime": "passed"},
+  "live_suites": {
+    "boundary": "passed",
+    "stop": "passed",
+    "fault": "passed",
+    "dialogue": "passed",
+    "voice": "passed",
+    "sequence": "passed"
+  },
+  "measurements": {
+    "invalid_request_joint_delta_rad": 0.0,
+    "motion_before_stop_rad": 0.1381,
+    "settled_stop_drift_rad": 0.0001,
+    "whisper_confidence": 0.8227280900238904,
+    "voice_placement_error_m": 0.003979196023891666,
+    "voice_placement_confidence": 0.860085818799452,
+    "sequence_placement_error_m": 0.005042578762019076,
+    "sequence_placement_confidence": 0.8064707715253818,
+    "both_tasks_finished_stationary_and_empty_handed": true
+  },
+  "sequence_skills": ["inspect", "pick", "place", "inspect"],
+  "separate_held_object_recovery": {
+    "status": "passed",
+    "session": "all-phases-v1",
+    "request_id": "recovery_e1a79c0351bf4fdc",
+    "placement_error_m": 0.019444783810822815,
+    "explicit_confirmation_required": true
+  },
+  "evidence": {
+    "full_report": "isaac_sim/_output/all-phases-final-v3.json",
+    "full_report_sha256": "646ee781449c298916bc2f1ecf2387bae7009f77cd13956587d5e7e362ae8411",
+    "artifact_directory": "isaac_sim/_output/all-phases-v3",
+    "final_rgb": "capture-efe36bee19b44e5a.png"
+  },
+  "limitations": [
+    "Known colored upright cubes, dimensions, table height, and camera calibration",
+    "Reported placement error is camera-measured planar error, not independent metrology",
+    "Confidence scores are heuristic, not calibrated probabilities",
+    "Voice acceptance uses a generated spoken WAV, not a noisy-room microphone study",
+    "MoveIt attachment is logical; final camera observation verifies physical simulated placement",
+    "This small campaign does not establish a statistical task success rate"
+  ]
+}

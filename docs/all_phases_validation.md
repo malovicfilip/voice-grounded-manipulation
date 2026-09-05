@@ -7,6 +7,35 @@ independent outcome verification, live cancellation, and recovery. Physical
 hardware, arbitrary household-object recognition, and grasp training are outside
 this repository's simulated manipulation milestone.
 
+## Accepted result
+
+All four phases passed on 2026-09-04 (Toronto), with the final campaign running
+from 2026-09-05 00:09:17 to 00:14:44 UTC. Runtime commit `32eda86` was tested in
+session `all-phases-v3`; repository commit `49d1795` adds the operator runbook.
+All 94 local tests and both ROS package builds also passed.
+
+| Live suite | Observed result |
+| --- | --- |
+| Boundary | Four distinct invalid requests refused for the expected reason; measured joint change 0.0 rad |
+| Stop | 0.1381 rad of actual motion before cancellation; no following descent; settled drift 0.0001 rad, below 0.01 rad |
+| Fault | Injected inhibit prevented pickup approach; new execution refused until explicit, stationary empty-gripper recovery |
+| Dialogue | Ambiguous command requested clarification without motion; corrected inspection required confirmation and completed |
+| Voice | Whisper confidence 0.8227; real LLM and MoveIt transfer to blue; final RGB-D confidence 0.8601 and planar error 3.98 mm |
+| Sequence | Real LLM proposed and completed `inspect → pick → place → inspect`; yellow placement confidence 0.8065 and planar error 5.04 mm |
+
+Both completed manipulation tasks ended stationary with no attached object.
+A separate stopped-held-object recovery in `all-phases-v1` explicitly placed
+the cube on blue and passed its camera gate (19.44 mm planar error); its
+placement-only authorization checks are covered by the local regression suite.
+
+The compact [versioned evidence record](evidence/all_phases_2026-09-04.json)
+includes the full report's SHA-256 hash. The original accepted report is
+`isaac_sim/_output/all-phases-final-v3.json`; RGB, metric depth, calibration,
+proposals, outcomes, and execution logs are archived locally under
+`isaac_sim/_output/all-phases-v3/`. The final image is
+`capture-efe36bee19b44e5a.png`. Large artifacts and recordings remain ignored;
+the compact evidence, code, configuration, tests, and runbooks are versioned.
+
 ## Acceptance matrix
 
 | Phase | Required behavior | Evidence |

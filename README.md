@@ -19,26 +19,26 @@ ambiguous, malformed, or unsafe input fails closed without a motion request.
 
 ## Roadmap
 
-### Phase 1 — Foundation and validation (integration demo passed)
+### Phase 1 — Foundation and validation (accepted in simulation)
 
 - Bring up the Panda scene in Isaac Sim and verify ROS 2 connectivity.
 - Confirm MoveIt 2 can plan and execute a small set of safe simulated motions.
 - Establish the accepted high-level skill schema and validation boundary.
 - Verify that invalid, ambiguous, or unsafe requests are rejected without robot motion.
 
-### Phase 2 — Perception and grounding (implemented for colored cubes)
+### Phase 2 — Perception and grounding (accepted for configured cubes)
 
 - Add RGB-D camera inputs and scene/object representations.
 - Ground validated skills against observable objects, poses, and workspace constraints.
 - Test perception failure handling and confidence-based refusal paths.
 
-### Phase 3 — Voice interaction (validated prototype)
+### Phase 3 — Voice interaction (accepted with spoken WAV input)
 
 - Integrate Whisper for speech-to-text.
 - Connect transcription to constrained intent extraction and skill proposals.
 - Add confirmations, clarifications, and audit logs for spoken commands.
 
-### Phase 4 — Task-level autonomy (implemented; live acceptance in progress)
+### Phase 4 — Task-level autonomy (accepted for bounded simulated tasks)
 
 - Expand the validated skill library for pick, place, inspect, and related tasks.
 - Compose multi-step tasks only through validated skill sequences.
@@ -180,19 +180,20 @@ contract without importing Isaac Sim or requiring a GPU.
 
 ## Current status
 
-The project now has a working headless simulation demo on the existing Brev L4
-instance. Isaac Sim 6.0.1, ROS 2 Jazzy, the Panda MoveIt 2 configuration, RGB-D
-grounding, constrained intent extraction, deterministic coordination, and
-MoveIt-only pick-and-place have all been exercised. A verified run moved the
-red cube to the blue target and observed it approximately 2.1 cm from the target
-center in the final RGB-D frame. A separately generated spoken WAV transcribed
-to the intended command with confidence 0.8227, above the configured 0.55
-threshold. The schema-constrained `gpt-5.6-terra` intent call has also passed a
-live smoke test without tools or coordinate output.
+All four phases are accepted for the configured six-cube simulation milestone.
+The 2026-09-04 (Toronto) campaign passed all six live suites on the existing Brev
+L4: invalid-request rejection, mid-motion stop, injected-fault recovery,
+clarification dialogue, spoken manipulation, and a confirmed multi-step task.
 
-The automated suite currently contains 59 passing tests, and both ROS packages
-build in the locked Pixi/RoboStack environment. See
-[`docs/phase_1_validation.md`](docs/phase_1_validation.md) for exact evidence
-and the remaining live fault-injection work before declaring the broader Phase
-1 safety campaign complete. Hardware deployment, general object detection,
-clarification dialogue, and multi-step recovery remain future work.
+The real Whisper → `gpt-5.6-terra` → validated skills → MoveIt → Isaac path moved
+the red cube to the blue target with 3.98 mm of camera-measured planar placement
+error. The subsequent LLM-planned `inspect → pick → place → inspect` sequence
+moved it to the yellow target with 5.04 mm of placement error. Both tasks ended
+stationary and empty-handed. The API key stayed in WSL; audio was transcribed
+on Brev and was not sent to OpenAI.
+
+All 94 simulator-independent tests pass, and both project ROS packages build.
+See the [acceptance record and demo runbook](docs/all_phases_validation.md) for
+the exact evidence and reproducible commands. This is a working simulation
+demo, not hardware safety certification, arbitrary-object perception, or a
+statistically established manipulation success rate.

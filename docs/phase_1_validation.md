@@ -101,9 +101,10 @@ go to OpenAI; audio is transcribed on Brev. See the
 ## Acceptance status
 
 All eleven criteria now have passing automated and/or live-simulator evidence.
-The live stop fixture observed 0.1754 rad of arm motion before cancellation,
+The final live stop fixture observed 0.1381 rad of arm motion before cancellation,
 recorded `VGM_EXECUTION_STOP reason=operator_stop`, and verified that no pickup
-descent followed. Settled joint drift was 0.0 rad over the measured final window.
+descent followed. Settled joint drift was 0.0001 rad over the measured final window,
+below the 0.01 rad threshold.
 A separate live inhibit-only backend fault prevented pickup approach, latched
 the session against further execution, and required explicit recovery. Recovery
 confirmed stationary joints and no held object and performed no motion.
