@@ -14,7 +14,8 @@ RUN test -n "$ISAACSIM_HOST" \
     && npm run build
 FROM node:22-bookworm-slim
 WORKDIR /app
-COPY --from=builder /app/web-viewer /app
+COPY --from=builder /app/web-viewer/dist /app/dist
+COPY server.mjs /app/server.mjs
 USER node
 EXPOSE 8210
-CMD ["./node_modules/.bin/vite", "preview", "--host", "0.0.0.0", "--port", "8210"]
+CMD ["node", "/app/server.mjs"]

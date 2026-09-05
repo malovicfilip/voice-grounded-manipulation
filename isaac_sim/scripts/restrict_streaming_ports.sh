@@ -4,15 +4,24 @@
 set -euo pipefail
 client_ip="${1:?Usage: restrict_streaming_ports.sh CLIENT_IPV4}"
 python3 -c 'import ipaddress,sys; ipaddress.IPv4Address(sys.argv[1])' "${client_ip}"
-sudo iptables -N VGM-STREAM
-sudo iptables -A VGM-STREAM -i lo -j ACCEPT
-sudo iptables -A VGM-STREAM -s "${client_ip}/32" -j ACCEPT
-sudo iptables -A VGM-STREAM -j DROP
-sudo iptables -I INPUT 1 -p tcp -m multiport --dports 49100,8210 -j VGM-STREAM
-sudo iptables -I INPUT 1 -p udp --dport 47998 -j VGM-STREAM
-# No IPv6 streaming clients are authorized.
-sudo ip6tables -I INPUT 1 -p tcp -m multiport --dports 49100,8210 -j DROP
-sudo ip6tables -I INPUT 1 -p udp --dport 47998 -j DROP
-sudo iptables -S VGM-STREAM
-sudo iptables -S INPUT
-sudo ip6tables -S INPUT
+if sudo nft list table inet vgm_stream >/dev/null 2>&1; then
+  echo 'Existing vgm_stream table: inspect it; refusing to overwrite.' >&2
+  exit 2
+fi
+# One atomic nftables transaction, compatible with Brev's native nft rules.
+# The inet table covers IPv4 and IPv6. Only the named IPv4 client is allowed.
+sudo nft -f - <<RULES
+table inet vgm_stream {
+  chain allow_client {
+    iifname "lo" accept
+    ip saddr ${client_ip}/32 accept
+    counter drop
+  }
+  chain input {
+    type filter hook input priority -10; policy accept;
+    tcp dport { 49100, 8210 } jump allow_client
+    udp dport 47998 jump allow_client
+  }
+}
+RULES
+sudo nft list table inet vgm_stream

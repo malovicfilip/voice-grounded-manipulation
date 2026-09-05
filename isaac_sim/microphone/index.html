@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Panda demo — microphone</title>
+<style>
+body { font: 18px system-ui; max-width: 760px; margin: 60px auto; padding: 24px; background: #15191f; color: #eee; }
+button { padding: 14px 22px; font: inherit; margin: 8px 8px 8px 0; cursor: pointer; }
+code { overflow-wrap: anywhere; color: #9ce48a; }
+</style>
+<h1>Speak a robot command</h1>
+<p>This page records locally only, for up to 15 seconds. It does not upload
+audio or move the robot. Allow your browser to use the microphone when asked.</p>
+<p>Try: “Pick the red cube and place it on the blue target.”</p>
+<button id="start">Start recording</button>
+<button id="stop" disabled>Stop and download WAV</button>
+<p id="status" role="status">Microphone is off.</p>
+<p>After downloading, enter this in the WSL robot task console, adjusting the
+filename if your browser renamed it:</p>
+<p><code>audio /mnt/c/Users/malov/Downloads/vgm-command.wav</code></p>
+<p>Whisper will transcribe the audio on Brev. Review the proposed high-level
+skills and type <code>yes</code> only if correct. The viewer itself does not
+interpret speech. Use the console's stop command or Ctrl+C to stop execution.</p>
+<script>
+const start = document.querySelector('#start'), stop = document.querySelector('#stop');
+const status = document.querySelector('#status');
+let stream, context, source, processor, muted, timer, chunks = [], busy = false, samples = 0;
+async function cleanup() {
+  clearTimeout(timer);
+  if (stream) stream.getTracks().forEach(track => track.stop());
+  if (source) source.disconnect();
+  if (processor) processor.disconnect();
+  if (muted) muted.disconnect();
+  if (context && context.state !== 'closed') await context.close();
+  stream = context = source = processor = muted = null;
+}
+start.onclick = async () => {
+  if (busy) return;
+  busy = true; start.disabled = true; chunks = []; samples = 0;
+  try {
+    if (!navigator.mediaDevices) throw new Error('Open this page through http://localhost:8765.');
+    stream = await navigator.mediaDevices.getUserMedia({audio: true, video: false});
+    context = new AudioContext();
+    await context.resume();
+    source = context.createMediaStreamSource(stream);
+    processor = context.createScriptProcessor(4096, 1, 1);
+    muted = context.createGain(); muted.gain.value = 0;
+    processor.onaudioprocess = event => {
+      const remaining = Math.max(0, context.sampleRate * 15 - samples);
+      const chunk = new Float32Array(event.inputBuffer.getChannelData(0).slice(0, remaining));
+      chunks.push(chunk); samples += chunk.length;
+      if (samples >= context.sampleRate * 15) queueMicrotask(() => stop.click());
+    };
+    source.connect(processor); processor.connect(muted); muted.connect(context.destination);
+    stop.disabled = false; status.textContent = 'Recording — speak now. Stops automatically after 15 seconds.';
+    timer = setTimeout(() => stop.click(), 15000);
+  } catch (error) {
+    await cleanup(); busy = false; start.disabled = false;
+    status.textContent = 'Microphone unavailable: ' + error.message;
+  }
+};
+stop.onclick = async () => {
+  if (!busy || stop.disabled) return;
+  stop.disabled = true;
+  const rate = context.sampleRate;
+  await cleanup();
+  const count = chunks.reduce((total, chunk) => total + chunk.length, 0);
+  if (!count) {
+    status.textContent = 'No samples captured. Check your microphone and try again.';
+  } else {
+    const data = new ArrayBuffer(44 + count * 2), view = new DataView(data);
+    const text = (offset, value) => [...value].forEach((c, i) => view.setUint8(offset + i, c.charCodeAt(0)));
+    text(0, 'RIFF'); view.setUint32(4, 36 + count * 2, true); text(8, 'WAVE'); text(12, 'fmt ');
+    view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true);
+    view.setUint32(24, rate, true); view.setUint32(28, rate * 2, true);
+    view.setUint16(32, 2, true); view.setUint16(34, 16, true); text(36, 'data');
+    view.setUint32(40, count * 2, true);
+    let offset = 44;
+    for (const chunk of chunks) for (const value of chunk) {
+      const sample = Math.max(-1, Math.min(1, value));
+      view.setInt16(offset, Math.round(sample * (sample < 0 ? 32768 : 32767)), true); offset += 2;
+    }
+    const url = URL.createObjectURL(new Blob([data], {type: 'audio/wav'}));
+    const link = document.createElement('a'); link.href = url; link.download = 'vgm-command.wav'; link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+    status.textContent = 'Microphone is off. WAV downloaded; nothing was uploaded or executed.';
+  }
+  chunks = []; busy = false; start.disabled = false;
+};
+window.addEventListener('pagehide', () => { if (stream) stream.getTracks().forEach(track => track.stop()); });
+</script>
+</html>
