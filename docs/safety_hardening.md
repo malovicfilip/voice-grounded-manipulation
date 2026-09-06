@@ -117,10 +117,38 @@ capture retained a red-cube center at approximately 0.900 m instead of forcing
 
 The initial WSL verification could not build the complete MoveIt nodes.
 On September 6, 2026, both packages were successfully built and deployed on
-Brev; 116 ROS-environment tests and four recording tests in the cached Isaac
+Brev; 117 ROS-environment tests and four recording tests in the cached Isaac
 image passed. A deliberately mismatched policy was rejected by the installed
 binary with exit code 2 before robot setup. Full live manipulation acceptance
 is still separate from build/deployment acceptance.
+
+Deployment details:
+
+- Safety implementation: `b984742`; dependency lock/import correction: `c8cdb1f`.
+- The first startup (`safety-live-v1`) exposed an eager package import of the
+  validator inside Isaac. Validator exports are now lazy: perception can load
+  without `jsonschema`, while requesting validation without it still fails.
+  A regression test and actual Isaac-image import smoke test verify this.
+- Fresh replacement session: `safety-live-v2`. The failed session's logs remain
+  in the ignored output directory; no manipulation was executed there.
+- Passive live checks passed after camera warm-up: both controllers activated,
+  a fresh RGB-D capture observed all six cubes and both target markers in XYZ,
+  and robot state reported stationary, zero sampled joint drift, and no held
+  object. Object confidence exceeded 0.81; target confidence exceeded 0.86.
+  Windows opened the viewer and localhost review console; an external streaming
+  signaling connection and GPU encoder activity were observed. These checks
+  do not constitute live manipulation acceptance or visual user confirmation.
+- Installed Python runtime files were compared with source. The actual C++
+  executable embeds the matching effective-policy digest
+  `48fe885554e9d1d89d3a5aaed0843860525da163c47e0c6c1b3a9c98d7e05840`.
+- Existing cloud recording/streaming edits were preserved in the Git stash
+  named `pre-safety-deploy-2026-09-06`, not overwritten or discarded. The
+  resolved dependency diff also has a named stash backup before synchronization.
+- Streaming host firewall was restored for the previously approved client IP
+  only. No new cloud firewall ports or paid instances were created.
+- The Windows guard was rearmed and verified for September 6 at 17:53:27
+  Toronto time. This is a dated deployment record, not a reusable deadline:
+  rearm it for future sessions and keep Windows powered and online.
 
 1. Keep the Brev cost/shutdown guard in place. Stop or finish the old robot
    session before updating software; never mix an old binary with new policy.

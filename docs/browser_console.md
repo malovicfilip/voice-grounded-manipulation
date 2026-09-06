@@ -24,7 +24,7 @@ command does not resume cloud compute, open public ports, or move the robot:
 ```bash
 cd /home/malov/voice-grounded-manipulation
 PYTHONPATH=ros2_ws/src/vgm_runtime python3 -m vgm_runtime.browser_console \
-  --session safety-live-v1 --port 8766
+  --session safety-live-v2 --port 8766
 ```
 
 Use the current simulation's session ID. The existing local `.env.local` key
@@ -48,7 +48,7 @@ use a separate WSL terminal:
 
 ```bash
 PYTHONPATH=ros2_ws/src/vgm_runtime python3 -m vgm_runtime.task_cli \
-  --session safety-live-v1 --operation stop
+  --session safety-live-v2 --operation stop
 ```
 
 To finish the session, request simulator shutdown and run `brev stop
