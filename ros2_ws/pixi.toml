@@ -28,6 +28,7 @@ ninja = ">=1.13.2,<2"
 [pypi-dependencies]
 # CTranslate2-backed local speech recognition; no PyTorch or cloud audio upload.
 faster-whisper = ">=1.2,<2"
+jsonschema = ">=4.18, <5"
 
 [activation.env]
 ROS_DISTRO = "jazzy"

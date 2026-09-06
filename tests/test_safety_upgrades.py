@@ -189,6 +189,30 @@ class Perception3DTests(unittest.TestCase):
 
 
 class CanonicalPolicyTests(unittest.TestCase):
+    def test_perception_import_does_not_require_command_runtime_dependencies(self):
+        script = '''
+import importlib.abc
+import sys
+sys.path.insert(0, sys.argv[1])
+class NoSchema(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname == "jsonschema" or fullname.startswith("jsonschema."):
+            raise ModuleNotFoundError("jsonschema deliberately unavailable")
+sys.meta_path.insert(0, NoSchema())
+from vgm_runtime.perception import ColorDepthGrounder
+from vgm_runtime.config import load_json_config
+assert load_json_config("safety_policy.json")["policy_version"] == 1
+assert "vgm_runtime.validator" not in sys.modules
+try:
+    from vgm_runtime import SkillValidator
+except ModuleNotFoundError:
+    pass
+else:
+    raise AssertionError("validator must fail closed without its schema dependency")
+'''
+        subprocess.run([sys.executable, "-c", script, str(ROOT / "ros2_ws/src/vgm_runtime")],
+                       check=True, capture_output=True, text=True)
+
     def test_header_generation_changes_with_policy_and_compiles(self):
         script = ROOT / "ros2_ws/src/vgm_moveit_demo/scripts/generate_safety_header.py"
         spec = importlib.util.spec_from_file_location("generator", script)

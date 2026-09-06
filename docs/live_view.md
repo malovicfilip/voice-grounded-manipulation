@@ -1,7 +1,9 @@
 # Interactive Isaac Sim viewing
 
-The simulator and streaming services are running and the robot session is
-ready; the final displayed browser picture is **awaiting user confirmation**.
+This runbook describes the simulator and streaming services. Readiness must be
+verified for each new session; a reachable viewer alone does not prove that
+the robot or camera is ready. The September 6 safety deployment uses session
+`safety-live-v1` (server IP `34.31.210.199`).
 Use the existing integrated scene with `--session --stream-host SERVER_IPV4`.
 This enables `omni.kit.livestream.app` using the installed Isaac Sim 6.0.1
 standalone example. The existing ROS/MoveIt control boundary is unchanged.
@@ -72,13 +74,14 @@ Start the simulator in its own terminal or named tmux session on Brev:
 ```bash
 cd /home/ubuntu/workspace
 ACCEPT_EULA=Y isaac_sim/scripts/run_voice_manipulation_demo.sh \
-  --session --run-id live-view-v1 --stream-host SERVER_IPV4
+  --session --run-id NEW_UNIQUE_RUN_ID --stream-host SERVER_IPV4
 ```
 
 Use a new run ID for each new session. After the initial camera warm-up and
 `Reusable simulator session ready`, open `http://SERVER_IPV4:8210/` in Edge or
 Chrome. Only one streaming client should be connected at once. The current
-session uses `live-view-v1`. HTTP delivery from Windows, an established
+session example below uses `safety-live-v1`. In the earlier streaming setup,
+HTTP delivery from Windows, an established
 client signaling connection, the UDP media socket, and GPU encoder activity
 have been verified. The first browser request exposed a 1080p/720p mismatch;
 the viewer was rebuilt to request 1280 x 720 at 30 fps, matching the simulator.
@@ -88,7 +91,7 @@ browser confirmation. No motion commands were issued during streaming setup.
 Run the existing task console in WSL, from the repository root:
 
 ```bash
-PYTHONPATH=ros2_ws/src/vgm_runtime python3 -m vgm_runtime.task_cli --session live-view-v1
+PYTHONPATH=ros2_ws/src/vgm_runtime python3 -m vgm_runtime.task_cli --session safety-live-v1
 ```
 
 The console uses the existing local API key and SSH; the key stays in WSL.
@@ -132,7 +135,7 @@ control. Stop the localhost server with Ctrl+C when done.
 From WSL, request cleanup, stop the viewer, then stop paid compute:
 
 ```bash
-PYTHONPATH=ros2_ws/src/vgm_runtime python3 -m vgm_runtime.task_cli --session live-view-v1 --operation shutdown
+PYTHONPATH=ros2_ws/src/vgm_runtime python3 -m vgm_runtime.task_cli --session safety-live-v1 --operation shutdown
 ssh vgm-isaac-dev docker stop vgm-live-viewer
 brev stop vgm-isaac-dev
 brev ls

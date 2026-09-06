@@ -20,8 +20,9 @@ ambiguous, malformed, or unsafe input fails closed without a motion request.
 The latest [safety hardening](docs/safety_hardening.md) adds measured 3D targets,
 two-frame resting-object verification, retained placement collisions, canonical
 Python/C++ safety configuration, direct JSON Schema enforcement, and deterministic
-STOP handling. Offline regression tests pass; these revisions still require a
-fresh MoveIt build and simulator acceptance run. Phase acceptance labels below
+STOP handling. These revisions were built and deployed on Brev on September 6,
+2026, with 120 tests passing across the ROS and Isaac environments. Full live
+manipulation acceptance remains pending. Phase acceptance labels below
 describe the previously demonstrated version, not certification of these changes.
 
 ## Roadmap

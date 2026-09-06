@@ -113,20 +113,21 @@ The measured target surfaces were approximately 0.752 m high. Another saved
 capture retained a red-cube center at approximately 0.900 m instead of forcing
 0.775 m. Recordings remain ignored and are not required by the portable tests.
 
-## Deployment gate — still required before claiming live acceptance
+## Deployment gate — required before claiming live acceptance
 
-WSL has ROS Jazzy but not the MoveIt development package, so the revised full
-C++ nodes have **not** been built or executed against MoveIt/Isaac here. The
-generated-header compile check is not a substitute for that build. Existing
-running cloud processes have not been hot-reloaded or changed.
+The initial WSL verification could not build the complete MoveIt nodes.
+On September 6, 2026, both packages were successfully built and deployed on
+Brev; 116 ROS-environment tests and four recording tests in the cached Isaac
+image passed. A deliberately mismatched policy was rejected by the installed
+binary with exit code 2 before robot setup. Full live manipulation acceptance
+is still separate from build/deployment acceptance.
 
 1. Keep the Brev cost/shutdown guard in place. Stop or finish the old robot
    session before updating software; never mix an old binary with new policy.
-2. Verify `jsonschema` is importable in the runtime environment. It is now a
-   declared Python/ROS package dependency, but the old Pixi lock does not yet
-   contain it. Updating the cloud environment requires approved dependency
-   resolution and committing the resulting manifest/lock together; this change
-   deliberately does not install packages or fabricate a lockfile.
+2. Verify `jsonschema` is importable in the runtime environment. After explicit
+   approval, the September 6 deployment added `jsonschema` 4.26.0 and its four
+   required support packages to the Pixi manifest/lock and installed with
+   `--locked`. Existing package versions and GPU drivers were unchanged.
 3. Rebuild `vgm_runtime` and `vgm_moveit_demo` in the existing supported MoveIt
    environment. Verify the generated digest matches `policy_digest()` and that
    a deliberately mismatched digest is rejected before movement.
