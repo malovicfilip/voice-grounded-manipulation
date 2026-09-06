@@ -1,5 +1,48 @@
 # Record the simulation demo
 
+## Short portfolio demo (60–90 seconds)
+
+Show one task from language to verified result. Screen-record the simulator
+viewport and browser confirmation console side by side. The camera-only
+recorder below does not capture the console UI. Capture microphone audio only
+with the speaker's consent; hide credentials, account details and notifications.
+
+| Time | Shot |
+| --- | --- |
+| 0–8 s | Title: “Voice-Grounded Robotic Manipulation — Isaac Sim simulation”; show the Panda and tabletop. |
+| 8–25 s | Speak “Pick up the blue cube and place it on the yellow target”; show actual transcription, proposed skills and operator confirmation. |
+| 25–60 s | Show the real pick, transfer, release and retreat, keeping object and gripper visible. |
+| 60–75 s | Show the actual verification result. Caption: “LLM selects skills; MoveIt plans motion.” |
+| 75–90 s | Optional separate rejection/clarification example, then repository URL and stack. |
+
+These are editing targets, not promised execution times. Extend the video if
+needed, or clearly label time cuts/speed-up. Do not fabricate a successful
+outcome, hide a failure as success, or present replayed audio as live speech.
+
+Preparation and recording:
+
+1. Complete the latest [live safety acceptance checklist](safety_hardening.md)
+   before presenting a new-version demo as validated. Retain the report and
+   commit ID; the September 4 recording predates these safety changes.
+2. Rearm the cost guard. Stop the full-editor container and start a **fresh
+   integrated session** using the [streaming guide](live_view.md). The full
+   editor alone does not run the microphone, coordinator or capture loop.
+3. Bind the [browser console](browser_console.md) to that session. Use one
+   operator console, check object/target visibility and target vacancy, and
+   verify a stationary, empty-handed robot before the task.
+4. Start screen capture, speak, review and explicitly confirm the instruction.
+   Keep STOP accessible. Do not run an acceptance campaign concurrently with
+   manual commands.
+5. Keep the unedited take and audit/perception evidence. Trim startup/waiting,
+   export a broadly playable MP4, and review it for readable text and private
+   information. Choose a hosting destination before publishing, then put the
+   actual video link near the top of README.md. Keep large media outside Git.
+
+For a quicker historical highlight, edit the existing five-minute recording
+below and label its date/version and synthetic audio replay. It is not evidence
+for the latest safety gates. `record_full_demo.py` runs an **active acceptance
+campaign** with fixed manipulation/API test commands; it is not passive capture.
+
 ## Verified recording: September 4, 2026
 
 Session `full-demo-video-v1` completed all six live acceptance suites. Its

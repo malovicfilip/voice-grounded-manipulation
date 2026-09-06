@@ -1,207 +1,134 @@
-# Voice-Grounded Manipulation
+# Voice-Grounded Robotic Manipulation
 
-Voice-Grounded Manipulation is an embodied-AI robotics project for safely executing spoken manipulation tasks with a simulated Franka Panda robot. The system combines NVIDIA Isaac Sim, ROS 2 Jazzy, MoveIt 2, RGB-D perception, Whisper speech transcription, and an LLM that translates user intent into a small, validated vocabulary of high-level robot skills.
+A simulated Franka Panda that turns spoken instructions into **reviewed,
+validated robot skills**. Built with NVIDIA Isaac Sim, ROS 2 Jazzy, MoveIt 2,
+RGB-D perception, Whisper, and an LLM used only for language interpretation.
 
-Safety is a core design constraint: the LLM must never directly control joints, velocities, motors, or trajectories. It may only propose structured high-level skills; deterministic validation, task planning, motion planning, collision checking, and robot-control layers retain authority over execution.
+Example: **“Pick up the blue cube and place it on the yellow target.”**
+The operator reviews the transcription and proposed task before confirming.
+Deterministic code resolves IDs to fresh measured poses, MoveIt plans the
+motion, and perception checks the result.
 
-## Safety boundary
+[Architecture](docs/architecture.md) · [Validation evidence](docs/all_phases_validation.md) ·
+[Safety updates](docs/safety_hardening.md) · [Demo video guide](docs/demo_recording.md)
 
-The LLM is an intent parser, not a motion controller. It receives only a
-transcript, a scene revision, and allowlisted object/target identifiers. Its
-strict JSON response is validated again against fresh RGB-D observations before
-the deterministic coordinator can create a plan. The LLM must never directly
-control joints, coordinates, velocities, motors, torques, efforts, or trajectories.
+## What it demonstrates
 
-Only MoveIt 2 may plan trajectories. The execution layer additionally enforces
-workspace limits, collision objects, 20% velocity/acceleration scaling, a
-120-second deadline, and final RGB-D outcome validation. Any missing, stale,
-ambiguous, malformed, or unsafe input fails closed without a motion request.
+- Spoken or typed commands, clarification, and browser-based operator confirmation.
+- RGB-D grounding of six configured colored cubes and blue/yellow target markers.
+- Bounded pick-and-place and multi-step tasks through ROS 2 and MoveIt 2.
+- Schema validation, robot-state preconditions, collision checking, cancellation,
+  explicit recovery, and perception-based outcome checks.
+- GPU deployment on NVIDIA Brev with separate language, perception, planning,
+  and execution components.
 
-The latest [safety hardening](docs/safety_hardening.md) adds measured 3D targets,
-two-frame resting-object verification, retained placement collisions, canonical
-Python/C++ safety configuration, direct JSON Schema enforcement, and deterministic
-STOP handling. These revisions were built and deployed on Brev on September 6,
-2026, with 121 tests passing across the ROS and Isaac environments. Full live
-manipulation acceptance remains pending. Phase acceptance labels below
-describe the previously demonstrated version, not certification of these changes.
+## Architecture and safety boundary
 
-## Roadmap
-
-### Phase 1 — Foundation and validation (accepted in simulation)
-
-- Bring up the Panda scene in Isaac Sim and verify ROS 2 connectivity.
-- Confirm MoveIt 2 can plan and execute a small set of safe simulated motions.
-- Establish the accepted high-level skill schema and validation boundary.
-- Verify that invalid, ambiguous, or unsafe requests are rejected without robot motion.
-
-### Phase 2 — Perception and grounding (accepted for configured cubes)
-
-- Add RGB-D camera inputs and scene/object representations.
-- Ground validated skills against observable objects, poses, and workspace constraints.
-- Test perception failure handling and confidence-based refusal paths.
-
-### Phase 3 — Voice interaction (accepted with spoken WAV input)
-
-- Integrate Whisper for speech-to-text.
-- Connect transcription to constrained intent extraction and skill proposals.
-- Add confirmations, clarifications, and audit logs for spoken commands.
-
-### Phase 4 — Task-level autonomy (accepted for bounded simulated tasks)
-
-- Expand the validated skill library for pick, place, inspect, and related tasks.
-- Compose multi-step tasks only through validated skill sequences.
-- Evaluate robustness, recovery behavior, and safety limits in simulation before any hardware work.
-
-## Repository layout
-
-- `isaac_sim/` — Isaac Sim scenes and supporting scripts.
-- `ros2_ws/` — ROS 2 Jazzy workspace source tree.
-- `config/` — shared configuration files.
-- `docs/` — architecture and validation criteria.
-- `tests/` — simulator-independent safety and regression tests; the live acceptance runner is in `isaac_sim/scripts/`.
-
-See [`docs/local_development.md`](docs/local_development.md) for the verified
-Ubuntu 24.04 WSL, ROS 2 Jazzy, and workspace setup.
-
-See [`docs/brev_development.md`](docs/brev_development.md) for the NVIDIA Brev
-GPU environment, cost guard, SSH/VS Code connection, and persistence workflow.
-
-The versioned runtime contracts are
-[`config/robot_skill.schema.json`](config/robot_skill.schema.json),
-[`config/safety_policy.json`](config/safety_policy.json), and
-[`config/phase_1_scene.json`](config/phase_1_scene.json).
-
-## Phase 1 visual demo
-
-On the configured Brev instance, generate RGB and metric-depth evidence from
-the real Isaac Sim scene without commanding the robot:
-
-```bash
-cd /home/ubuntu/workspace
-ACCEPT_EULA=Y isaac_sim/scripts/run_phase_1_demo.sh
+```text
+Speech → Whisper transcript (or typed text)
+       → LLM: high-level skills with object/target IDs only
+       → JSON Schema + semantic/robot-state validation
+       → operator review and confirmation
+       → fresh 3D grounding + execution-time safety checks
+       → deterministic task coordinator → MoveIt 2 → Isaac Sim Panda
+       → perception-based placement verification
 ```
 
-The launcher rebuilds the versioned scene, captures one 640 x 480 RGB-D frame,
-and prints the unique, git-ignored output directory. Each run contains an RGB
-PNG, raw metric depth as NumPy data, a viewable depth PNG, and `manifest.json`.
-It does not publish network ports or call any robot-control interface. See the
-[Brev demo runbook](docs/brev_development.md#phase-1-visual-demo) for artifact
-copy and inspection commands.
+**The LLM must never directly control joints, Cartesian coordinates, velocities,
+motors, torques, or trajectories.** It is a semantic parser, not a motion
+controller. Deterministic layers retain execution authority.
 
-## Constrained MoveIt demo
+STOP phrases and the browser STOP button bypass the LLM. This is software
+cancellation, not a hardware emergency stop; spoken stopping still incurs
+transcription latency.
 
-On the configured Brev instance, run an allowlisted named-pose skill through
-ROS 2 Jazzy and MoveIt 2 against the live Isaac Sim Franka:
+The latest placement gate checks XY/Z error, attachment state, and two
+observations consistent with rest. Released objects remain collision obstacles
+during retreat. [Shared configuration](config/) defines the skill schema,
+safety policy and authored scene geometry.
 
-```bash
-cd /home/ubuntu/workspace
-ACCEPT_EULA=Y isaac_sim/scripts/run_moveit_demo.sh extended
-```
+## Evidence and limitations
 
-The accepted targets are `ready`, `extended`, and `transport`; any other value
-is rejected before Isaac Sim or MoveIt starts. The application caps velocity
-and acceleration scaling at 20% and asks MoveIt to plan and execute the named
-pose. It never publishes joints or trajectories itself. Each successful run
-writes initial/final RGB images, initial/final joint-state snapshots, component
-logs, and a manifest under the git-ignored `isaac_sim/_output/` directory.
+| Milestone | Evidence and scope |
+| --- | --- |
+| September 4, 2026 simulation campaign | Six live suites passed: invalid requests, cancellation, fault recovery, clarification, spoken manipulation, and a confirmed multi-step task. |
+| Historical placement examples | Two tasks measured 3.98 mm and 5.04 mm **planar** error. Individual runs, not an accuracy benchmark or success rate. |
+| September 6 safety deployment | Both ROS packages built; **121 automated tests passed** across the ROS and Isaac environments. Passive live checks observed six cubes, both targets, and a stationary, empty-handed robot. |
+| Pending | Full live manipulation acceptance of the latest safety changes, including retained retreat collisions and stricter 3D outcome verification. |
 
-Isaac Sim 6.0.1 can take several minutes to produce its first camera frame on
-this headless environment. Wait for the launcher's success result rather than
-assuming that a CPU-bound startup has failed. See the
-[Brev development runbook](docs/brev_development.md#ros-2-jazzy-and-moveit-2)
-for environment setup, build, and artifact details.
+The [historical acceptance record](docs/all_phases_validation.md) does not
+certify the latest changes. See the [current validation checklist](docs/safety_hardening.md).
 
-## Voice-grounded pick-and-place demo
+This is a **working simulation project**, not physical-robot deployment,
+production safety certification, arbitrary household-object recognition, or a
+statistically established manipulation success rate.
 
-The integrated launcher captures and grounds a live RGB-D scene, converts a
-command to a schema-constrained high-level skill, revalidates the referenced
-object immediately before execution, asks MoveIt 2 to perform the bounded
-pick-and-place, then accepts the result only if a final RGB-D frame observes the
-cube within 6 cm of the allowlisted target.
+## Technology
 
-Use the deterministic intent provider for a repeatable simulator acceptance
-run that needs no API credential:
+- **Simulation:** NVIDIA Isaac Sim 6.0.1, Franka Panda, RGB-D camera.
+- **Planning/runtime:** ROS 2 Jazzy, MoveIt 2, Python and C++.
+- **Speech/language:** faster-whisper (`small.en`, CPU/int8), OpenAI Responses API.
+- **Validation:** JSON Schema, deterministic scene/state checks, regression tests.
+- **Environment:** Windows 11 + WSL2 Ubuntu 24.04; NVIDIA Brev L4 GPU VM.
 
-```bash
-cd /home/ubuntu/workspace
-ACCEPT_EULA=Y isaac_sim/scripts/run_voice_manipulation_demo.sh \
-  --transcript "Pick the red cube and place it on the blue target" \
-  --provider rules
-```
+The API key stays in WSL. Whisper transcribes on Brev; OpenAI receives text and
+high-level identifiers, not audio, robot coordinates, or trajectories.
+Credentials and generated recordings are excluded from Git.
 
-For the real LLM and audio path, use the workstation console below. It keeps
-`OPENAI_API_KEY` in WSL, runs `faster-whisper` (`small.en`, CPU/int8) on Brev,
-and requires confirmation before motion. Do not commit `.env.local`, API keys,
-recordings, or generated run artifacts.
+## Run and explore
 
-The rules provider is only a deterministic integration-test fixture. It does
-not replace the schema-constrained LLM in the intended system.
+This is a multi-service robotics system, not a one-command fresh installation.
+Start with [local development](docs/local_development.md) and
+[Brev setup](docs/brev_development.md). Verify the automatic shutdown guard
+before paid GPU work; keep its Windows host powered and online.
 
-## Confirmed voice and multi-step tasks
+- **Speak to the robot:** [microphone → review → confirm](docs/browser_console.md).
+  Requires a ready integrated session and a local console using that session ID.
+- **Watch the demo:** [interactive streaming](docs/live_view.md).
+- **Inspect/edit the scene:** [full Isaac Sim editor](docs/full_editor.md).
+  Editor mode is separate from voice/MoveIt execution; do not run both simultaneously.
+- **Reproduce acceptance:** [live validation runbook](docs/all_phases_validation.md).
+  Its commands can move the simulated robot and call the API; review first.
+- **Record a portfolio video:** [60–90 second plan](docs/demo_recording.md#short-portfolio-demo-6090-seconds).
 
-The workstation console keeps the OpenAI API key in WSL and sends constrained
-skill requests over SSH to the existing Brev instance. Brev independently validates
-each proposal against a fresh RGB-D capture before invoking MoveIt. A reusable
-simulator session supports `inspect`, `pick`, `place`, `pick_and_place`, the
-allowlisted named poses, and gripper skills with holding preconditions.
+VM addresses and session IDs change. Use current verified values, not historical
+addresses copied from deployment records.
 
-After checking the Brev shutdown guard and building the project packages,
-start a session on Brev:
+### Local checks
 
-```bash
-cd /home/ubuntu/workspace
-ACCEPT_EULA=Y isaac_sim/scripts/run_voice_manipulation_demo.sh \
-  --session --run-id my-session
-```
-
-When it prints `Reusable simulator session ready`, start the console in WSL:
-
-```bash
-PYTHONPATH=ros2_ws/src/vgm_runtime python3 -m vgm_runtime.task_cli \
-  --session my-session
-```
-
-Enter a command such as “Inspect the red cube, pick it up, place it on the blue
-target, then inspect it again.” The console displays the proposed sequence and
-waits for `yes`. Enter `audio /path/to/command.wav` to use Whisper. Ambiguous
-requests ask for clarification. Ctrl+C cancels an executing task; `stop` also
-works from an idle console. `recover` checks robot state and requires a new
-command before anything resumes. A held object requires the separately
-confirmed `recover place blue_target` or `recover place yellow_target` operation.
-
-See [all-phase acceptance and operator instructions](docs/all_phases_validation.md)
-for the complete campaign, per-phase criteria, audit evidence, and limitations.
-
-## Local verification
-
-The simulator-independent suite needs Python, NumPy, and jsonschema (listed in
-`requirements-test.txt`), but no GPU, ROS installation, API call, or cloud instance:
+With the dependencies in `requirements-test.txt` available (recording tests
+additionally need Pillow), run from the repository root:
 
 ```bash
 python3 -m unittest discover -s tests -v
 python3 isaac_sim/scripts/build_phase_1_scene.py --validate-only
 ```
 
-The first command runs the safety, schema, planning-boundary, perception,
-Whisper-adapter, audit, and outcome tests. The second validates the scene
-contract without importing Isaac Sim or requiring a GPU.
+These run regression tests, including local HTTP checks, and validate the scene
+contract. Neither requires a GPU, cloud instance, API call, or robot motion.
+They do not replace live acceptance.
 
-## Current status
+## Phased roadmap
 
-All four phases are accepted for the configured six-cube simulation milestone.
-The 2026-09-04 (Toronto) campaign passed all six live suites on the existing Brev
-L4: invalid-request rejection, mid-motion stop, injected-fault recovery,
-clarification dialogue, spoken manipulation, and a confirmed multi-step task.
+1. **Foundation:** Panda scene, ROS connectivity, MoveIt planning, skill boundary.
+2. **Perception:** RGB-D grounding and confidence/freshness refusal paths.
+3. **Voice:** transcription, constrained interpretation, clarification and confirmation.
+4. **Task composition:** bounded multi-step execution, cancellation and recovery.
 
-The real Whisper → `gpt-5.6-terra` → validated skills → MoveIt → Isaac path moved
-the red cube to the blue target with 3.98 mm of camera-measured planar placement
-error. The subsequent LLM-planned `inspect → pick → place → inspect` sequence
-moved it to the yellow target with 5.04 mm of placement error. Both tasks ended
-stationary and empty-handed. The API key stayed in WSL; audio was transcribed
-on Brev and was not sent to OpenAI.
+All four reached the historical configured-scene milestone. Next: live regression
+acceptance of the safety upgrades, a short reproducible demo, and broader
+robustness evaluation—not a claim of hardware readiness.
 
-All 94 simulator-independent tests pass, and both project ROS packages build.
-See the [acceptance record and demo runbook](docs/all_phases_validation.md) for
-the exact evidence and reproducible commands. This is a working simulation
-demo, not hardware safety certification, arbitrary-object perception, or a
-statistically established manipulation success rate.
+## Repository layout
+
+| Directory | Contents |
+| --- | --- |
+| `isaac_sim/` | Scene builders, launchers, viewer and recording tools |
+| `ros2_ws/src/` | Python runtime and C++ MoveIt integration |
+| `config/` | Skill schema, canonical safety policy and scene configuration |
+| `tests/` | Automated safety and regression tests |
+| `docs/` | Architecture, setup, operator guides and validation evidence |
+
+Large RGB-D captures, recordings and logs live under ignored
+`isaac_sim/_output/`. Keep source and reviewed documentation in Git; back up
+media separately before discarding the temporary cloud VM.
