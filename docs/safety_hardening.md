@@ -143,6 +143,23 @@ current refusal messages, rejects unrelated transport failures, uses one
 capture for its fault-latch check, and cancels if the stop fixture raises.
 The updated local suite passed 124 tests, including three runner regressions.
 
+### Release-feedback correction
+
+Follow-up inspection of the stopped scene returned `valid: true` from MoveIt's
+state-validity service with both fingers at 0.0399 m, without deleting or
+resizing the released obstacle. This points to action-completion/state-feedback
+timing at release rather than proving a persistent geometric overlap.
+
+Commit `16b8fe9` adds a bounded open-hand feedback gate before detachment and
+again before retreat. It reads the arm interface's robot state, compares the
+hand's named-open variables within the canonical policy tolerance, and requires
+a stable interval. Retreat explicitly uses that observed start state. Missing,
+nonfinite, mismatched or timed-out feedback fails closed. Collision geometry,
+collision checking and 3D outcome thresholds are unchanged. Both ROS packages
+built on Brev and 125 local tests passed. A fresh live retry is required before
+claiming this resolves the observed failure; perception after retreat remains
+part of that acceptance, not an assumed success.
+
 The initial WSL verification could not build the complete MoveIt nodes.
 On September 6, 2026, both packages were successfully built and deployed on
 Brev; 117 ROS-environment tests and four recording tests in the cached Isaac
