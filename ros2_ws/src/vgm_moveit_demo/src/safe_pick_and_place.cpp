@@ -151,6 +151,9 @@ public:
     if (!move_hand("open", "release_gripper")) {
       return false;
     }
+    if (!wait_for_open_feedback()) {
+      return false;
+    }
     if (!before_deadline("detach_object")) {
       return false;
     }
@@ -261,7 +264,14 @@ private:
     if (!before_deadline(primitive)) {
       return false;
     }
-    group.setStartStateToCurrentState();
+    if (primitive == "place_retreat") {
+      // Use the observed open-hand state, never the hand action's completion
+      // timestamp as proof that the arm's state monitor has caught up.
+      if (!wait_for_open_feedback()) {return false;}
+      group.setStartState(*release_state_);
+    } else {
+      group.setStartStateToCurrentState();
+    }
     moveit::planning_interface::MoveGroupInterface::Plan plan;
     if (group.plan(plan) != moveit::core::MoveItErrorCode::SUCCESS) {
       cancel("planning_failure");
@@ -302,6 +312,45 @@ private:
     const bool succeeded = plan_and_execute(arm_, primitive);
     arm_.clearPoseTargets();
     return succeeded;
+  }
+
+  moveit::core::RobotStatePtr release_state_;
+
+  bool wait_for_open_feedback()
+  {
+    const auto expected = hand_.getNamedTargetValues("open");
+    const auto start = std::chrono::steady_clock::now();
+    auto stable_since = start;
+    bool stable = false;
+    release_state_.reset();
+    while (std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count() <
+      k_place_open_feedback_timeout_s) {
+      if (!before_deadline("release_feedback")) {return false;}
+      auto observed = arm_.getCurrentState(0.1);
+      bool matches = observed && !expected.empty();
+      for (const auto& [joint, value] : expected) {
+        if (!observed) {matches = false; break;}
+        const auto& names = observed->getRobotModel()->getVariableNames();
+        if (std::find(names.begin(), names.end(), joint) == names.end()) {matches = false; break;}
+        const double actual = observed->getVariablePosition(joint);
+        matches = matches && std::isfinite(actual) &&
+          std::abs(actual - value) <= k_place_open_feedback_tolerance_m;
+      }
+      const auto now = std::chrono::steady_clock::now();
+      if (!matches) {stable = false;}
+      else {
+        if (!stable) {stable_since = now; stable = true;}
+        if (std::chrono::duration<double>(now - stable_since).count() >=
+          k_place_open_feedback_settle_s) {
+          release_state_ = observed;
+          RCLCPP_INFO(node_->get_logger(), "VGM_RELEASE_OPEN_FEEDBACK verified=true");
+          return true;
+        }
+      }
+      std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    }
+    cancel("release_feedback_timeout");
+    return false;
   }
 
   bool move_hand(const std::string& target, const std::string& primitive)

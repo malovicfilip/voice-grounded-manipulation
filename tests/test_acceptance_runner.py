@@ -30,6 +30,17 @@ class Backend:
 
 
 class AcceptanceRunnerTests(unittest.TestCase):
+    def test_release_waits_for_open_feedback_without_removing_obstacle(self):
+        root = Path(__file__).resolve().parents[1]
+        source = (root / "ros2_ws/src/vgm_moveit_demo/src/safe_pick_and_place.cpp").read_text()
+        release = source.index('move_hand("open", "release_gripper")')
+        wait = source.index("wait_for_open_feedback()", release)
+        detach = source.index("arm_.detachObject(object_id)", release)
+        self.assertLess(wait, detach)
+        self.assertIn("group.setStartState(*release_state_)", source)
+        self.assertIn('cancel("release_feedback_timeout")', source)
+        self.assertNotIn("removeCollisionObjects", source)
+
     def test_stop_fixture_cancels_on_failure(self):
         class Cancellable:
             stopped = False

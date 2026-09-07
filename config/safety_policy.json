@@ -38,6 +38,9 @@
     "retreat_height_m": 0.23
   },
   "place": {
+    "open_feedback_timeout_s": 3.0,
+    "open_feedback_tolerance_m": 0.0005,
+    "open_feedback_settle_s": 0.2,
     "approach_height_m": 0.25,
     "release_height_offset_m": 0.14,
     "retreat_height_m": 0.28
