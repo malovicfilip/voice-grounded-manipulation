@@ -2,18 +2,20 @@
 
 ## Purpose
 
-The system turns a spoken manipulation request into a safe simulated action by a Franka Panda. It is deliberately layered so that language interpretation cannot bypass perception, validation, motion planning, or execution safeguards.
+The system turns a spoken manipulation request into a safety-bounded simulated action by a Franka Panda. It is deliberately layered so that language reasoning cannot bypass perception, validation, motion planning, or execution safeguards. The LLM can operate either as a one-shot task interpreter or as a closed-loop high-level controller, but it never becomes the geometric or actuator controller.
 
 ## Components
 
 - **User interaction** — the WSL operator console accepts a transcript or WAV, shows the exact task for confirmation, handles clarification replies, and provides stop/recovery controls.
 - **Whisper speech-to-text** — uses local `faster-whisper` to convert an audio file to a transcript and refuses empty or low-confidence results.
 - **RGB-D perception and scene grounding** — synchronizes RGB and metric depth, estimates cube-center XYZ and target-marker support-surface XYZ in the world frame, and records confidence, time, pixel support, and a revision covering objects and targets. No measured object Z is replaced with tabletop height.
-- **LLM intent-to-skill interface** — asks `gpt-5.6-terra` for a strict-schema high-level skill or an ordered task of up to eight skills using only the transcript and allowlisted scene identifiers. API storage is disabled. The API call and key remain on the workstation.
+- **LLM task interface** — asks `gpt-5.6-terra` for a strict-schema fixed task or, in agent mode, an operator-reviewed semantic mission envelope followed by one high-level capability decision at a time. Model-visible state contains IDs/relations and current allowed capabilities, never Cartesian poses, joints, trajectories, or motion limits. API storage is disabled. The API call and key remain on the workstation.
+- **Agent capability gateway** — derives the exact actions currently available from fresh scene/holding state, the confirmed object/target/named-pose scope, deterministic completion conditions, target occupancy, and a finite action budget. An executable agent choice is converted back into the existing robot-skill schema before any backend request. Physical failure ends autonomous authority instead of triggering an LLM retry.
 - **Skill validator and policy layer** — checks the exact schema, allowed skill/parameter combinations, replay protection, freshness, object confidence, workspace limits, and forbidden direct-control fields. It rejects anything invalid, ambiguous, unsupported, stale, or unsafe.
 - **Pre-execution gate** — obtains a fresh RGB-D scene, rejects changed object identities or holding state and more than 1 cm of measured object drift, and regenerates the deterministic plan. A hash change caused only by bounded sensor jitter can be rebound to the new capture; stale current evidence cannot authorize motion.
 - **Task coordinator** — expands a validator-minted skill into an immutable sequence of bounded task primitives. The current `pick_and_place` plan contains gripper, Cartesian approach/retreat, attach, and detach operations; no model-supplied coordinates are used.
-- **Task session** — checks the whole proposed sequence and target occupancy before confirmation, enforces pick/place holding preconditions, obtains a new observation before each skill, and latches faults until explicit recovery. Completed placements update only that object's tracked destination.
+- **Task session** — in fixed-task mode, checks the whole proposed sequence and target occupancy before confirmation, enforces pick/place holding preconditions, obtains a new observation before each skill, and latches faults until explicit recovery. Completed placements update only that object's tracked destination.
+- **Agent session** — in closed-loop mode, confirms a finite semantic authority envelope and completion contract once, then captures fresh state before every LLM decision. It enforces mission scope, current capability options, request replay protection, a bounded action count, deterministic gating of `finish`, no finish while holding, and explicit stop/recovery boundaries.
 - **MoveIt 2** — performs kinematic planning, collision checking, and trajectory generation within configured limits.
 - **ROS 2 Jazzy** — provides communication, lifecycle management, transforms, robot state, and telemetry between the system components.
 - **Isaac Sim** — hosts the simulated workspace, Franka Panda, sensors, physics, and simulation clock.
@@ -22,38 +24,50 @@ The system turns a spoken manipulation request into a safe simulated action by a
 
 ## Data flow
 
+Two operator-selectable language-control modes share the same physical execution boundary.
+
 ```text
-Isaac RGB + metric depth ──> scene grounding ──> scene revision + object IDs
-                                                     │
-Spoken request ──> Whisper transcript ───────────────┤
-                                                     v
-                  constrained LLM skill proposal (no tools or coordinates)
-                                                     │
-                                                     v
-                    strict schema + whole-task policy validation
-                                                     │
-                                                     v
-                  operator confirmation bound to the exact task
-                                                     │
-fresh RGB-D scene ──> freshness/drift revalidation ──┤
-                                                     v
-                       deterministic task primitives
-                                                     │
-                                                     v
-                    MoveIt 2 collision-aware planning
-                                                     │
-                                                     v
-             ROS 2 controllers ──> Panda in Isaac Sim
-                                                     │
-                                                     v
-           final RGB-D outcome check + status/audit result
+                                 ┌──────── fixed-task mode ────────┐
+Speech/text → transcript → LLM → exact ordered task → operator confirm
+                                 └─────────────────────────────────┘
+
+                                 ┌──────── agent mode ─────────────┐
+Speech/text → transcript → LLM → mission scope/completion contract/budget → operator confirm
+                                                   │
+                                                   ▼
+                                      fresh semantic observation
+                                                   │
+                                      allowed capabilities (code)
+                                                   │
+                                                   ▼
+                                      LLM chooses one capability
+                                                   │
+                                      result / next observation ───┐
+                                                   ▲                │
+                                                   └────────────────┘
+                                 └─────────────────────────────────┘
+
+Both modes then use the same physical path for every executable skill:
+
+capability/task skill
+  → strict robot-skill schema + robot/scene policy
+  → backend fresh capture + execution-time drift gate
+  → deterministic measured geometry + policy offsets
+  → MoveIt 2 collision-aware planning
+  → ROS 2 controllers → Panda in Isaac Sim
+  → fresh RGB-D / held-state outcome verification
 ```
+
+The agent feedback loop is semantic. Exact measured geometry remains inside the
+deterministic perception/execution side of the boundary.
 
 ## Authority boundaries
 
-The LLM is an intent interpreter, not a robot controller. It must never directly control joints, velocities, motors, or trajectories. It can only emit a validated high-level skill proposal, for example `pick(object_id)` or `place(object_id, target_id)`, using an explicitly defined schema.
+The LLM is a **task-level controller**, not an actuator or geometric controller. In fixed-task mode it proposes an ordered task. In agent mode it can repeatedly choose among supervisor-generated high-level capabilities. It must never directly control joints, Cartesian coordinates, velocities, motors, torques, collision-scene edits, safety limits, or trajectories.
 
-Only the deterministic validation and execution path may authorize motion:
+Agent mode adds authority without bypassing the old boundary: the operator confirms object IDs, target IDs, named poses, deterministic completion conditions, and an action budget. `finish` is offered only after those conditions are deterministically true. Each subsequent model decision must be one of the exact capabilities offered for the fresh current state and remains inside that confirmed scope. Model-visible semantic observations deliberately omit `position_m` and other physical-control values.
+
+Only the deterministic validation and execution path may authorize motion, regardless of language-control mode:
 
 1. The validator accepts an allowed skill with complete, safe parameters.
 2. Perception grounds referenced objects and confirms required confidence and scene conditions.
@@ -102,7 +116,7 @@ still requires recording/transcription. This is software cancellation, not a
 hardware-certified emergency stop. Clarification state stores the original
 request and bounded question/answer turns, never recursively wrapped prompts.
 
-`config/safety_policy.json` is the canonical safety policy; object dimensions,
+`config/safety_policy.json` is the canonical physical safety policy; `config/agent_policy.json` separately bounds semantic agent capabilities and action count without changing motion limits; object dimensions,
 target identities and table geometry are authored once in its referenced scene
 file. Runtime target poses are never read from authored spawn positions. CMake
 generates C++ constants from that effective policy. The executor checks a policy
@@ -148,8 +162,7 @@ freshness checks against its own actual wall clock after a new capture.
 ## Deployment boundary
 
 The workstation sends JSON requests over authenticated SSH; no application
-listener is required. Only the transcript and allowlisted identifiers
-are sent to OpenAI. WAV recordings are transcribed on Brev and are excluded from
+listener is required. Only the transcript and allowlisted semantic information are sent to OpenAI. In agent mode that can additionally include visibility/holding/occupancy relations, the prior sanitized result, remaining action budget, completion-condition status, and supervisor-generated capability options. Coordinates and robot-control values remain local to the deterministic stack. WAV recordings are transcribed on Brev and are excluded from
 Git and audit logs. API credentials remain local.
 
 The GPU deployment is headless and uses NVIDIA Isaac Sim 6.0.1 in its pinned

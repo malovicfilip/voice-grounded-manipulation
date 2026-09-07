@@ -88,22 +88,46 @@ the viewer was rebuilt to request 1280 x 720 at 30 fps, matching the simulator.
 Refresh the viewer after this update. A displayed live picture still requires
 browser confirmation. No motion commands were issued during streaming setup.
 
-Run the existing task console in WSL, from the repository root:
+For the easiest operator experience, keep the simulator/viewer running and launch
+the unified workstation dashboard from the repository root:
 
 ```bash
-PYTHONPATH=ros2_ws/src/vgm_runtime python3 -m vgm_runtime.task_cli --session safety-live-v2
+./demo doctor \
+  --mode remote \
+  --session YOUR_SESSION_ID \
+  --host vgm-isaac-dev \
+  --viewer-url http://SERVER_IPV4:8210/
+
+./demo run \
+  --mode remote \
+  --control agent \
+  --session YOUR_SESSION_ID \
+  --host vgm-isaac-dev \
+  --viewer-url http://SERVER_IPV4:8210/
 ```
 
-The console uses the existing local API key and SSH; the key stays in WSL.
-Review each proposed task and explicitly confirm it. The LLM must never
-directly control joints, velocities, motors, or trajectories.
+This embeds the existing WebRTC viewer alongside command entry, confirmation,
+STOP/recovery, semantic agent state, and the decision timeline at
+`http://localhost:8766/`. The dashboard remains loopback-only; embedding the
+viewer does not alter cloud/host firewall requirements or WebRTC signaling.
+Use `--control task` for the original fixed planned-task confirmation model.
+
+The terminal task console remains available as a fallback:
+
+```bash
+PYTHONPATH=ros2_ws/src/vgm_runtime python3 -m vgm_runtime.task_cli --session YOUR_SESSION_ID
+```
+
+The API key remains on the workstation. The LLM must never directly control
+joints, Cartesian coordinates, velocities, motors, torques, or trajectories.
 
 ## Microphone input
 
 For the integrated **record → review → Confirm/Cancel** workflow without manual
-downloads or terminal submission, use the [browser command console](browser_console.md)
-at `http://localhost:8766/`. The file-based option below remains available as a
-fallback.
+downloads or terminal submission, use the [unified demo dashboard](demo_dashboard.md)
+at `http://localhost:8766/`. In agent mode the confirmation covers the reviewed
+semantic mission scope/completion contract/action budget; in task mode it covers the exact proposed
+steps. The file-based option below remains available as a fallback.
 
 The viewer does not itself interpret spoken robot commands. A separate,
 local-only microphone page prepares a WAV for the existing task console:

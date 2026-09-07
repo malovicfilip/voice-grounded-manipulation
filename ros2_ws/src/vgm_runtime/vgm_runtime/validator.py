@@ -196,6 +196,24 @@ class SkillValidator:
         if proposal.pose_name is not None and proposal.pose_name not in self.policy["allowed_named_poses"]:
             raise SkillValidationError("pose_name", "named pose is not allowed by policy")
 
+    def validate_scene(self, scene: GroundedScene | None) -> None:
+        """Validate scene freshness without minting an executable skill.
+
+        This is intentionally public so higher-level supervisors can use the
+        exact same freshness rule when deciding which capabilities are safe to
+        expose. It does not authorize motion.
+        """
+        if scene is None:
+            raise SkillValidationError("scene_required", "fresh robot state is required")
+        self._validate_scene_age(scene)
+
+    def validate_observation(self, observation, scene: GroundedScene, label: str) -> None:
+        """Validate one grounded observation using the canonical safety rules."""
+        if label not in {"object", "target"}:
+            raise ValueError("observation label must be object or target")
+        self._validate_scene_age(scene)
+        self._validate_observation(observation, scene, label)
+
     def _validate_scene_age(self, scene):
         age = float(self.clock()) - scene.captured_at_s
         if not math.isfinite(age) or not 0.0 <= age <= self.policy["maximum_scene_age_s"]:

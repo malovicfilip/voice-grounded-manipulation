@@ -1,0 +1,18 @@
+{
+  "policy_version": 1,
+  "maximum_actions": 10,
+  "maximum_goal_characters": 2000,
+  "confirmation_ttl_s": 120.0,
+  "mission_deadline_s": 300.0,
+  "allowed_capabilities": [
+    "observe_workspace",
+    "inspect",
+    "pick",
+    "place",
+    "pick_and_place",
+    "move_named_pose",
+    "finish",
+    "request_human_help",
+    "stop"
+  ]
+}

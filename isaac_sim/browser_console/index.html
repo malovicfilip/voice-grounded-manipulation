@@ -1,51 +1,144 @@
 <!doctype html>
 <html lang="en">
-<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Panda — voice command console</title>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VGM Robot Dashboard</title>
 <style>
-:root { color-scheme: dark; font: 17px system-ui; background: #14191f; color: #eef3f7; }
-body { max-width: 900px; margin: 30px auto; padding: 20px; }
-section { background: #202832; padding: 22px; margin: 18px 0; border-radius: 12px; }
-button, textarea { font: inherit; border: 1px solid #66717d; border-radius: 6px; padding: 12px; }
-button { cursor: pointer; margin: 5px 8px 5px 0; }
-button:disabled { opacity: .4; cursor: default; }
-textarea { width: 95%; display: block; margin: 12px 0; }
-.confirm { background: #a7e76e; color: #14210c; }.danger { background: #aa2936; color: white; }
-#status { font-weight: 600; } #error { color: #ffb4b4; white-space: pre-wrap; }
-pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; }
-small { color: #bac6d2; } li { margin: 10px 0; }
+:root {
+  color-scheme: dark;
+  font: 16px/1.45 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #0a0f14;
+  color: #edf4f8;
+  --panel: #111922;
+  --panel2: #17222e;
+  --line: #2c3d4d;
+  --muted: #9cb0c1;
+  --accent: #7ee0bd;
+  --warn: #ffc56e;
+  --danger: #ff6b78;
+}
+* { box-sizing: border-box; }
+body { margin: 0; min-height: 100vh; background: radial-gradient(circle at top left, #142330 0, #0a0f14 45%); }
+header { display:flex; align-items:center; justify-content:space-between; gap:18px; padding:18px 24px; border-bottom:1px solid var(--line); background:#0c131aee; position:sticky; top:0; z-index:5; backdrop-filter:blur(8px); }
+h1 { margin:0; font-size:20px; letter-spacing:.2px; }
+header p { margin:2px 0 0; color:var(--muted); font-size:13px; }
+.badges { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:8px; }
+.badge { padding:5px 9px; border:1px solid var(--line); border-radius:999px; font-size:12px; color:var(--muted); background:#0a1118; }
+.badge.live { color:#baf7df; border-color:#326957; }
+main { max-width:1450px; margin:0 auto; padding:22px; display:grid; grid-template-columns:minmax(0, 1.55fr) minmax(360px, .8fr); gap:18px; }
+.card { background:linear-gradient(180deg, var(--panel2), var(--panel)); border:1px solid var(--line); border-radius:14px; overflow:hidden; box-shadow:0 16px 40px #0005; }
+.card > h2, .card > .title { margin:0; padding:14px 16px; border-bottom:1px solid var(--line); font-size:14px; letter-spacing:.04em; text-transform:uppercase; color:#c9d7e2; }
+.card-body { padding:16px; }
+.left, .right { display:flex; flex-direction:column; gap:18px; min-width:0; }
+.viewer-wrap { position:relative; background:#05080b; min-height:430px; aspect-ratio:16/9; display:grid; place-items:center; }
+iframe { width:100%; height:100%; border:0; position:absolute; inset:0; background:#05080b; }
+.viewer-empty { color:var(--muted); text-align:center; padding:30px; max-width:520px; }
+.viewer-empty strong { color:#eef7fb; display:block; margin-bottom:8px; }
+#replayScene { position:absolute; inset:0; display:none; background:linear-gradient(145deg,#152534,#0b1219); overflow:hidden; }
+.table-plane { position:absolute; inset:10% 7%; border:1px solid #4c6275; border-radius:18px; background:#3a2a20; box-shadow:inset 0 0 80px #0007; }
+.scene-item { position:absolute; transform:translate(-50%,-50%); width:34px; height:34px; border-radius:7px; border:2px solid #ffffff88; display:grid; place-items:center; font-size:10px; font-weight:700; color:#fff; text-shadow:0 1px 2px #000; box-shadow:0 7px 15px #0006; }
+.scene-target { width:70px; height:70px; border-radius:50%; border:3px dashed #ffffff99; background:#ffffff0b; font-size:9px; }
+.red_cube { background:#bd3041; } .green_cube { background:#3d9b5e; } .blue_cube { background:#386fc2; } .yellow_cube { background:#c39a32; color:#111; text-shadow:none; } .magenta_cube { background:#b548a0; } .cyan_cube { background:#3aa1ae; }
+.blue_target { border-color:#6ba4ff; } .yellow_target { border-color:#ffd86b; }
+.scene-held { outline:4px solid var(--accent); }
+.controls { display:grid; grid-template-columns:1fr auto; gap:10px; align-items:end; }
+textarea { width:100%; resize:vertical; min-height:76px; background:#0a1118; color:#edf4f8; border:1px solid #425567; border-radius:9px; padding:11px 12px; font:inherit; }
+textarea:focus, button:focus-visible { outline:2px solid #7fc9ff; outline-offset:2px; }
+button { border:1px solid #52687b; border-radius:9px; padding:10px 13px; color:#eef5f9; background:#213140; font:600 14px inherit; cursor:pointer; }
+button:hover:not(:disabled) { filter:brightness(1.12); }
+button:disabled { opacity:.38; cursor:default; }
+button.primary { background:#27664f; border-color:#409878; }
+button.danger { background:#852c38; border-color:#b94b59; }
+button.secondary { background:#1b2834; }
+.row { display:flex; flex-wrap:wrap; gap:9px; align-items:center; }
+small, .muted { color:var(--muted); }
+#status { font-weight:750; text-transform:capitalize; }
+.statusline { display:flex; align-items:center; gap:9px; margin:0 0 12px; }
+.dot { width:9px; height:9px; border-radius:50%; background:#71808b; box-shadow:0 0 0 4px #71808b22; }
+.dot.ok { background:var(--accent); box-shadow:0 0 0 4px #7ee0bd22; }
+.dot.warn { background:var(--warn); box-shadow:0 0 0 4px #ffc56e22; }
+.dot.bad { background:var(--danger); box-shadow:0 0 0 4px #ff6b7822; }
+.kv { display:grid; grid-template-columns:130px 1fr; gap:7px 12px; margin:10px 0; font-size:14px; }
+.kv div:nth-child(odd) { color:var(--muted); }
+ol { margin:8px 0 0; padding-left:22px; }
+li { margin:8px 0; }
+.timeline { display:flex; flex-direction:column; gap:8px; }
+.event { border-left:3px solid #54697a; background:#0c141c; padding:10px 11px; border-radius:0 8px 8px 0; }
+.event strong { display:block; font-size:13px; }
+.event small { display:block; margin-top:3px; }
+.event.succeeded, .event.completed { border-left-color:var(--accent); }
+.event.failed, .event.faulted { border-left-color:var(--danger); }
+#message { margin:10px 0; color:#d7e4ec; }
+#error { color:#ffabb3; white-space:pre-wrap; min-height:1.4em; }
+pre { white-space:pre-wrap; overflow-wrap:anywhere; margin:0; max-height:320px; overflow:auto; font:12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color:#c7d4dd; }
+details { border-top:1px solid var(--line); }
+summary { cursor:pointer; padding:12px 16px; color:var(--muted); }
+details pre { padding:0 16px 16px; }
+.safety-note { border:1px solid #795d2b; background:#2c2416; padding:11px 12px; border-radius:9px; color:#f7dfb2; font-size:13px; }
+.scope { display:flex; flex-wrap:wrap; gap:6px; margin:6px 0 12px; }
+.chip { border:1px solid #3d5264; border-radius:999px; padding:4px 8px; font-size:12px; background:#0d161e; color:#c9d8e2; }
+footer { max-width:1450px; margin:0 auto; padding:0 22px 28px; color:var(--muted); font-size:12px; }
+@media (max-width: 980px) { main { grid-template-columns:1fr; } .viewer-wrap { min-height:320px; } }
+@media (max-width: 600px) { header { align-items:flex-start; flex-direction:column; } .badges { justify-content:flex-start; } main { padding:12px; } .controls { grid-template-columns:1fr; } .kv { grid-template-columns:105px 1fr; } }
 </style>
-<h1>Speak. Review. Confirm.</h1>
-<p id="session">Connecting to the local command bridge…</p>
-<p>Keep the live Isaac Sim viewer open alongside this page. Use this console
-instead of the terminal while it is active.</p>
-<section>
-<h2>1. Give an instruction</h2>
-<button id="record" disabled>Start microphone</button>
-<button id="finish" disabled>Stop recording &amp; review</button>
-<p><small>Up to 15 seconds. Audio goes over SSH to Whisper on Brev. The transcript
-and scene identifiers go to the LLM; the API key stays in WSL.</small></p>
-<label for="text">Or type your instruction:</label>
-<textarea id="text" maxlength="2000" rows="2" placeholder="Pick the blue cube and place it on the yellow target." disabled></textarea>
-<button id="prepare" disabled>Review typed instruction</button>
-</section>
-<section>
-<h2>2. Check before moving</h2>
-<p id="status" role="status">Connecting…</p>
-<p><strong>What was heard:</strong> <span id="transcript">—</span></p>
-<ol id="steps"></ol>
-<p id="message"></p>
-<button id="confirm" class="confirm" disabled>Confirm &amp; execute</button>
-<button id="cancel" disabled>Cancel / record again</button>
-<p><small>No task executes without this confirmation. Confirmation expires after
-two minutes; the robot rechecks the scene before execution.</small></p>
-</section>
-<button id="stop" class="danger" disabled>STOP ROBOT</button>
-<button id="recover" disabled>Reset after stop / fault</button>
-<p><small>Stop is a software request, not a hardware emergency stop. Closing a tab
-does not stop an executing task or Brev billing. If the page disconnects, use
-the terminal stop command.</small></p>
-<p id="error" role="alert"></p>
-<details><summary>Execution details</summary><pre id="details"></pre></details>
+</head>
+<body>
+<header>
+  <div><h1>Voice-Grounded Manipulation</h1><p id="session">Connecting to the local dashboard bridge…</p></div>
+  <div class="badges"><span id="modeBadge" class="badge">mode</span><span id="backendBadge" class="badge">backend</span><span id="connectionBadge" class="badge">connecting</span></div>
+</header>
+<main>
+  <div class="left">
+    <section class="card">
+      <h2>Live / demo view</h2>
+      <div class="viewer-wrap">
+        <iframe id="viewer" title="Isaac Sim live viewer" hidden></iframe>
+        <div id="replayScene"><div class="table-plane"></div></div>
+        <div id="viewerEmpty" class="viewer-empty"><strong>No viewer configured</strong>Pass <code>--viewer-url</code> to embed the Isaac WebRTC viewer here, or use replay mode for the local sandbox.</div>
+      </div>
+    </section>
+    <section class="card">
+      <h2>Command</h2>
+      <div class="card-body">
+        <div class="controls">
+          <div><label for="text"><strong>Instruction</strong></label><textarea id="text" maxlength="2000" placeholder="Put the red cube on the yellow target." disabled></textarea></div>
+          <button id="prepare" class="primary" disabled>Review instruction</button>
+        </div>
+        <div class="row" style="margin-top:10px"><button id="record" class="secondary" disabled>Start microphone</button><button id="finish" class="secondary" disabled>Stop recording</button><small id="micNote">Voice input is available when remote/local transcription is configured.</small></div>
+      </div>
+    </section>
+    <section class="card">
+      <h2>Review and execution</h2>
+      <div class="card-body">
+        <p class="statusline"><span id="statusDot" class="dot"></span><span id="status">Connecting…</span></p>
+        <div class="kv"><div>Transcript</div><div id="transcript">—</div><div>Goal</div><div id="goal">—</div><div>Action budget</div><div id="budget">—</div></div>
+        <div id="scopeWrap" hidden><div class="muted">Confirmed semantic scope</div><div id="scope" class="scope"></div></div>
+        <ol id="steps"></ol>
+        <p id="message"></p>
+        <div class="row"><button id="confirm" class="primary" disabled>Confirm</button><button id="cancel" class="secondary" disabled>Cancel</button><button id="stop" class="danger" disabled>STOP ROBOT</button><button id="recover" class="secondary" disabled>Recover</button></div>
+        <p class="safety-note">The LLM can choose only currently offered high-level capabilities. It never receives robot coordinates, joints, trajectories, or safety limits. STOP remains outside the model path. Software STOP is not a certified hardware E-stop.</p>
+        <p id="error" role="alert"></p>
+      </div>
+    </section>
+  </div>
+  <div class="right">
+    <section class="card">
+      <h2>Agent / task timeline</h2>
+      <div class="card-body"><div id="timeline" class="timeline"><span class="muted">No decisions yet.</span></div></div>
+    </section>
+    <section class="card">
+      <h2>Current semantic state</h2>
+      <div class="card-body"><pre id="semantic">No semantic observation yet.</pre></div>
+    </section>
+    <section class="card">
+      <h2>Safety boundary</h2>
+      <div class="card-body"><div class="kv"><div>LLM authority</div><div>Goal / capability selection</div><div>Motion authority</div><div>Validator + execution gate + MoveIt</div><div>Outcome authority</div><div>Fresh perception + robot state</div><div>Network bind</div><div>127.0.0.1 only</div></div></div>
+      <details><summary>Raw dashboard state</summary><pre id="details"></pre></details>
+    </section>
+  </div>
+</main>
+<footer>Closing this page does not stop a running simulator or cloud billing. Keep an independent terminal STOP path available during live runs.</footer>
 <script src="/app.js"></script>
+</body>
 </html>

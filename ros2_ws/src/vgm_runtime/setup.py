@@ -30,6 +30,7 @@ setup(
                     REPOSITORY_ROOT / "config" / "robot_skill.schema.json"
                 ),
                 relative_source(REPOSITORY_ROOT / "config" / "safety_policy.json"),
+                relative_source(REPOSITORY_ROOT / "config" / "agent_policy.json"),
                 relative_source(REPOSITORY_ROOT / "config" / "phase_1_scene.json"),
             ],
         ),
@@ -48,6 +49,7 @@ setup(
             "skill_gateway = vgm_runtime.ros_gateway:main",
             "voice_cli = vgm_runtime.voice_cli:main",
             "task_console = vgm_runtime.task_cli:main",
+            "vgm_demo = vgm_runtime.demo:main",
         ]
     },
 )

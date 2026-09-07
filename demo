@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export PYTHONPATH="${ROOT}/ros2_ws/src/vgm_runtime${PYTHONPATH:+:${PYTHONPATH}}"
+exec python3 -m vgm_runtime.demo "$@"
