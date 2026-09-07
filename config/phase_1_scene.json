@@ -143,7 +143,7 @@
       "prim_path": "/World/Targets/YellowTarget",
       "position": [0.0, -0.3, 0.751],
       "radius_m": 0.06,
-      "color_rgb": [0.3, 0.22, 0.01]
+      "color_rgb": [1.0, 0.82, 0.08]
     }
   ],
   "presentation": {
