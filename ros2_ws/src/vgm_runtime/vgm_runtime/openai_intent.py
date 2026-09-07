@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from copy import deepcopy
 import os
 import urllib.error
 import urllib.request
@@ -17,6 +18,35 @@ from .types import GroundedScene
 
 class IntentModelError(RuntimeError):
     """The remote intent proposal failed closed."""
+
+
+def provider_schema_copy(schema: Mapping[str, Any]) -> dict[str, Any]:
+    """Project local constraints onto the Responses Structured Outputs subset.
+
+    Only the transport copy is relaxed; responses MUST still validate against
+    the original schema. See https://developers.openai.com/api/docs/guides/structured-outputs
+    for unsupported composition. uniqueItems also receives invalid_json_schema
+    from the provider. Preserve supported anyOf and ordinary type/bound checks.
+    Traverse schema positions, not property names or enum/const JSON literals.
+    """
+    unsupported = {
+        "uniqueItems", "allOf", "oneOf", "not", "if", "then", "else",
+        "dependentRequired", "dependentSchemas", "dependencies",
+    }
+    result = {}
+    for keyword, value in schema.items():
+        if keyword in unsupported:
+            continue
+        if keyword in {"properties", "$defs", "definitions", "patternProperties"}:
+            result[keyword] = {name: provider_schema_copy(child)
+                               for name, child in value.items()}
+        elif keyword == "anyOf":
+            result[keyword] = [provider_schema_copy(child) for child in value]
+        elif keyword in {"items", "additionalProperties"} and isinstance(value, Mapping):
+            result[keyword] = provider_schema_copy(value)
+        else:
+            result[keyword] = deepcopy(value)
+    return result
 
 
 def load_local_api_key(path: Path | None = None) -> None:
@@ -161,7 +191,7 @@ class OpenAIIntentModel:
                     "strict": True,
                     # The provider's subset is only an output aid. Full local
                     # schema (including skill conditionals) is mandatory below.
-                    "schema": {k: v for k, v in self.schema.items() if k != "allOf"},
+                    "schema": provider_schema_copy(self.schema),
                 }
             },
         }
