@@ -394,7 +394,9 @@ class AgentBrowserController:
                 result = self.agent.recover()
                 if result.get("status") == "recovered":
                     self.backend.cancelled.clear()
-                    return {"status": "idle", "mission": None, "timeline": [], "recovery": result}
+                    return {"status": "idle", "mission": None, "timeline": [],
+                            "message": "", "code": None, "transcript": "",
+                            "last_result": None, "stop_result": None, "recovery": result}
                 return {"status": "faulted", "recovery": result}
             self._launch("recovering", recover)
 

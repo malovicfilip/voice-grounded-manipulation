@@ -214,6 +214,15 @@ public:
     if (!move_arm(target[0], target[1], target[2] + k_place_retreat_height_m, "place_retreat")) {
       return false;
     }
+    // Return home as part of deterministic placement, never an LLM-generated
+    // trajectory. Retain all world obstacles and refuse if still carrying.
+    if (!planning_scene_.getAttachedObjects().empty() ||
+        planning_scene_.getObjects({object_id}).count(object_id) != 1 ||
+        kAllowedNamedPoses.count(kPostPlaceNamedPose) != 1 ||
+        !arm_.setNamedTarget(kPostPlaceNamedPose) ||
+        !plan_and_execute(arm_, "place_return_home")) {
+      return false;
+    }
     RCLCPP_INFO(
       node_->get_logger(),
       "VGM_PICK_PLACE_RESULT request_id=%s object=%s target=%s plan=success execution=success",

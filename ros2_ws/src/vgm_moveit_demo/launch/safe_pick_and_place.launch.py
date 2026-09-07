@@ -66,6 +66,9 @@ def generate_launch_description():
                     moveit_config.robot_description_kinematics,
                     parameters,
                     observed_parameters,
+                    # Isaac publishes /clock and simulation-stamped joint states.
+                    # Wall-clock deadlines remain independent in the executor.
+                    {"use_sim_time": True},
                 ],
             )]
     return LaunchDescription(arguments + [OpaqueFunction(function=launch_executor)])

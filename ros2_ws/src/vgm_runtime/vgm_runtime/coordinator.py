@@ -90,6 +90,9 @@ class TaskCoordinator:
             raise ValueError("validated place is missing its allowlisted target")
         x, y, z = scene.targets[target_id].position_m
         place = self.policy["place"]
+        home = self.policy["post_place_named_pose"]
+        if home not in self.policy["allowed_named_poses"]:
+            raise ValueError("post-place pose must be allowlisted")
         return (
             MotionPrimitive(
                 "move_cartesian",
@@ -108,4 +111,5 @@ class TaskCoordinator:
                 object_id=object_id,
                 position_m=(x, y, z + place["retreat_height_m"]),
             ),
+            MotionPrimitive("move_named_pose", pose_name=home),
         )

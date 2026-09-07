@@ -37,6 +37,10 @@ def generate(policy):
                       "kMinimumConfidence": "minimum_object_confidence"}.items():
         lines.append(f"inline constexpr double {name} = {scalar(policy[key])};")
     lines.append(f"inline constexpr int kPlanningAttempts = {int(policy['planning_attempts'])};")
+    home = policy["post_place_named_pose"]
+    if home not in policy["allowed_named_poses"]:
+        raise ValueError("post-place pose must be allowlisted")
+    lines.append("inline const std::string kPostPlaceNamedPose = " + json.dumps(home) + ";")
     for group in ("pick", "place"):
         for key, value in policy[group].items():
             lines.append(f"inline constexpr double k_{group}_{key} = {scalar(value)};")

@@ -85,6 +85,35 @@ class SafetyUpgradeTests(unittest.TestCase):
         self.assertEqual(params["safety_policy_digest"], policy_digest(self.policy))
         self.assertEqual(scene_from_mapping(scene.to_mapping()), scene)
 
+    def test_placement_returns_to_policy_home_after_retreat(self):
+        for name in ("place", "pick_and_place"):
+            scene = replace(self.scene, held_object_id="red_cube") if name == "place" else self.scene
+            value = proposal(name, object_id="red_cube", target_id="blue_target", scene_revision=REVISION)
+            skill = self.validator().validate(value, scene)
+            plan = TaskCoordinator(self.policy).create_plan(skill, scene)
+            self.assertEqual(plan.primitives[-2].kind, "move_cartesian")
+            self.assertEqual(plan.primitives[-1].kind, "move_named_pose")
+            self.assertEqual(plan.primitives[-1].pose_name, "ready")
+            changed = copy.deepcopy(self.policy)
+            changed["post_place_named_pose"] = "extended"
+            self.assertEqual(TaskCoordinator(changed).create_plan(skill, scene).primitives[-1].pose_name, "extended")
+            changed["post_place_named_pose"] = "unapproved"
+            with self.assertRaisesRegex(ValueError, "allowlisted"):
+                TaskCoordinator(changed).create_plan(skill, scene)
+
+    def test_executor_simulation_clock_and_guarded_home_order(self):
+        root = Path(__file__).resolve().parents[1]
+        launch = (root / "ros2_ws/src/vgm_moveit_demo/launch/safe_pick_and_place.launch.py").read_text()
+        self.assertIn('{"use_sim_time": True}', launch)
+        source = (root / "ros2_ws/src/vgm_moveit_demo/src/safe_pick_and_place.cpp").read_text()
+        retreat = source.index('"place_retreat"')
+        home = source.index('"place_return_home"')
+        success = source.index('"VGM_PICK_PLACE_RESULT')
+        self.assertLess(retreat, home)
+        self.assertLess(home, success)
+        self.assertIn('!planning_scene_.getAttachedObjects().empty()', source[retreat:home])
+        self.assertIn('planning_scene_.getObjects({object_id}).count(object_id) != 1', source[retreat:home])
+
     def test_absent_stale_low_confidence_nonworld_and_outside_targets_fail_closed(self):
         original = self.scene.targets["blue_target"]
         value = proposal("pick_and_place", object_id="red_cube", target_id="blue_target", scene_revision=REVISION)

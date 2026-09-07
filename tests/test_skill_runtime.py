@@ -238,6 +238,7 @@ class CoordinatorAndPipelineTest(unittest.TestCase):
                 "open_gripper",
                 "detach_object",
                 "move_cartesian",
+                "move_named_pose",
             ],
         )
         self.assertNotIn("joint", json.dumps(kinds))

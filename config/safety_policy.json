@@ -12,6 +12,7 @@
     "refuse"
   ],
   "allowed_named_poses": ["ready", "extended", "transport"],
+  "post_place_named_pose": "ready",
   "scene_geometry_file": "phase_1_scene.json",
   "workspace_m": {
     "x": [-0.55, 0.55],
