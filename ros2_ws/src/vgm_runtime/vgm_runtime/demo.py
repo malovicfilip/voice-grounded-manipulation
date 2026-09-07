@@ -55,7 +55,7 @@ def _backend(args):
         return ReplayBackend()
     if args.mode == "remote":
         from .ssh_backend import SSHBackend
-        return SSHBackend(session, host=args.host)
+        return SSHBackend(session, host=args.host, remote_root=args.remote_root)
     from .local_backend import LocalBackend
     return LocalBackend(session)
 
@@ -252,6 +252,7 @@ def build_parser():
     run.add_argument("--control", choices=("agent", "task"), default="agent")
     run.add_argument("--session")
     run.add_argument("--host", default="vgm-isaac-dev")
+    run.add_argument("--remote-root", default="/home/ubuntu/workspace")
     run.add_argument("--viewer-url", default="")
     run.add_argument("--port", type=int, default=8766)
     run.add_argument("--no-open", action="store_true")
@@ -265,6 +266,7 @@ def build_parser():
     diagnostic.add_argument("--mode", choices=("remote", "local", "replay"), default="remote")
     diagnostic.add_argument("--session")
     diagnostic.add_argument("--host", default="vgm-isaac-dev")
+    diagnostic.add_argument("--remote-root", default="/home/ubuntu/workspace")
     diagnostic.add_argument("--viewer-url", default="")
     diagnostic.add_argument("--skip-capture", action="store_true", help="skip passive RGB-D capture")
     diagnostic.add_argument("--json", action="store_true")
@@ -278,6 +280,7 @@ def main(argv=None):
         args.mode = "replay"
         args.session = "replay"
         args.host = "vgm-isaac-dev"
+        args.remote_root = "/home/ubuntu/workspace"
         args.viewer_url = ""
         return run_dashboard(args)
     if args.command == "doctor":

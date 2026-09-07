@@ -156,6 +156,26 @@ class Phase1SceneConfigTest(unittest.TestCase):
         )
         self.assertNotEqual(camera['position'], camera['look_at'])
 
+    def test_presentation_is_visual_only_and_separate_from_rgbd_camera(self):
+        """Keep cosmetic livestream scenery outside the sensing contract."""
+        presentation = self.config['presentation']
+        spectator = presentation['spectator_camera']
+        backdrop = presentation['studio_backdrop']
+
+        self.assertTrue(presentation['visual_only'])
+        self.assertEqual(len(spectator['eye']), 3)
+        self.assertEqual(len(spectator['target']), 3)
+        self.assertNotEqual(spectator['eye'], spectator['target'])
+        self.assertNotEqual(spectator['eye'], self.config['camera']['position'])
+        self.assertTrue(backdrop['enabled'])
+        self.assertTrue(backdrop['panels'])
+        self.assertTrue(
+            all(
+                panel['prim_path'].startswith('/World/Presentation/')
+                for panel in backdrop['panels']
+            )
+        )
+
     def test_placement_targets_are_unique_and_on_the_table(self):
         targets = self.config['targets']
         self.assertEqual(

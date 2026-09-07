@@ -146,6 +146,29 @@
       "color_rgb": [0.3, 0.22, 0.01]
     }
   ],
+  "presentation": {
+    "visual_only": true,
+    "spectator_camera": {
+      "eye": [1.25, 1.15, 1.72],
+      "target": [-0.05, 0.0, 0.98]
+    },
+    "studio_backdrop": {
+      "enabled": true,
+      "color_rgb": [0.1, 0.12, 0.15],
+      "panels": [
+        {
+          "prim_path": "/World/Presentation/BackWallX",
+          "center": [-1.35, 0.0, 1.25],
+          "size": [0.05, 3.0, 2.5]
+        },
+        {
+          "prim_path": "/World/Presentation/BackWallY",
+          "center": [0.0, -1.25, 1.25],
+          "size": [3.0, 0.05, 2.5]
+        }
+      ]
+    }
+  },
   "constraints": {
     "expected_cube_count": 6,
     "minimum_cube_center_separation_m": 0.1,

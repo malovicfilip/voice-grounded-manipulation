@@ -52,6 +52,7 @@ simulator/viewer on the GPU machine, then run on your workstation:
   --mode remote \
   --session YOUR_SESSION_ID \
   --host vgm-isaac-dev \
+  --remote-root /home/ubuntu/voice-grounded-manipulation \
   --viewer-url http://YOUR_SERVER_IPV4:8210/
 
 ./demo run \
@@ -59,8 +60,17 @@ simulator/viewer on the GPU machine, then run on your workstation:
   --control agent \
   --session YOUR_SESSION_ID \
   --host vgm-isaac-dev \
+  --remote-root /home/ubuntu/voice-grounded-manipulation \
   --viewer-url http://YOUR_SERVER_IPV4:8210/
 ```
+
+`--remote-root` makes the remote repository location explicit instead of assuming
+`/home/ubuntu/workspace`. Omit it when the repository actually lives at the legacy
+path.
+
+The live stream uses a dedicated presentation-only spectator camera and matte studio
+backdrop. Those prims have no collision or rigid-body API and do not alter the
+`/World/WorkspaceCamera` RGB-D sensor used for grounding and outcome verification.
 
 The dashboard stays bound to `127.0.0.1` and embeds the existing Isaac viewer in
 the same page. It does not make the viewer public, start cloud compute, or relax

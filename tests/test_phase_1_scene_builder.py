@@ -74,6 +74,15 @@ class Phase1SceneBuilderTest(unittest.TestCase):
         for fragment in forbidden_call_fragments:
             self.assertNotIn(fragment, source)
 
+    def test_presentation_scenery_has_no_physics_api(self):
+        """Keep backdrop geometry cosmetic and outside collision authority."""
+        source = BUILDER_PATH.read_text(encoding='utf-8')
+        visual_source = source.split('def _create_visual_box', maxsplit=1)[1]
+        visual_source = visual_source.split('def _create_presentation', maxsplit=1)[0]
+        self.assertNotIn('CollisionAPI', visual_source)
+        self.assertNotIn('RigidBodyAPI', visual_source)
+        self.assertNotIn('MassAPI', visual_source)
+
     def test_builder_preserves_errors_during_isaac_shutdown(self):
         """Keep Python failures visible with a nonzero process status."""
         source = BUILDER_PATH.read_text(encoding='utf-8')

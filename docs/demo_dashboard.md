@@ -31,6 +31,7 @@ the deployment runbooks. Then, on the workstation:
   --mode remote \
   --session YOUR_SESSION_ID \
   --host vgm-isaac-dev \
+  --remote-root /home/ubuntu/voice-grounded-manipulation \
   --viewer-url http://YOUR_SERVER_IPV4:8210/
 ```
 
@@ -42,8 +43,12 @@ If the passive checks look correct:
   --control agent \
   --session YOUR_SESSION_ID \
   --host vgm-isaac-dev \
+  --remote-root /home/ubuntu/voice-grounded-manipulation \
   --viewer-url http://YOUR_SERVER_IPV4:8210/
 ```
+
+Use `--remote-root` whenever the Brev checkout is not `/home/ubuntu/workspace`.
+The remote path is syntax-validated before it is inserted into the fixed SSH command.
 
 The dashboard prints and normally opens:
 
@@ -59,6 +64,16 @@ Embedding is a convenience layer only. It does **not** proxy WebRTC signalling,
 change NVIDIA's viewer configuration, expose robot-control endpoints, start the
 simulator, or change host/cloud firewall rules. Streaming access still has to follow
 `docs/live_view.md`.
+
+
+### Presentation-only live view
+
+The integrated Isaac scene authors a dedicated spectator framing and matte studio
+backdrop for the WebRTC stream. These `/World/Presentation/*` prims are deliberately
+visual-only: the builder applies no collision, rigid-body, or mass API to them. The
+workspace RGB-D camera remains `/World/WorkspaceCamera` with its original calibrated
+pose and is still the only camera used for grounding and outcome verification.
+Changing the spectator framing therefore changes the video, not robot authority.
 
 ## Local live session
 

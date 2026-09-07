@@ -72,7 +72,7 @@ while the project controller is running.
 Start the simulator in its own terminal or named tmux session on Brev:
 
 ```bash
-cd /home/ubuntu/workspace
+cd /home/ubuntu/voice-grounded-manipulation
 ACCEPT_EULA=Y isaac_sim/scripts/run_voice_manipulation_demo.sh \
   --session --run-id NEW_UNIQUE_RUN_ID --stream-host SERVER_IPV4
 ```
@@ -96,6 +96,7 @@ the unified workstation dashboard from the repository root:
   --mode remote \
   --session YOUR_SESSION_ID \
   --host vgm-isaac-dev \
+  --remote-root /home/ubuntu/voice-grounded-manipulation \
   --viewer-url http://SERVER_IPV4:8210/
 
 ./demo run \
@@ -103,8 +104,14 @@ the unified workstation dashboard from the repository root:
   --control agent \
   --session YOUR_SESSION_ID \
   --host vgm-isaac-dev \
+  --remote-root /home/ubuntu/voice-grounded-manipulation \
   --viewer-url http://SERVER_IPV4:8210/
 ```
+
+The livestream viewport is framed by `presentation.spectator_camera` in the scene
+contract and can include `/World/Presentation/*` studio scenery. Those presentation
+prims are visual-only and do not alter the calibrated workspace RGB-D camera,
+physics, collision world, or MoveIt inputs.
 
 This embeds the existing WebRTC viewer alongside command entry, confirmation,
 STOP/recovery, semantic agent state, and the decision timeline at

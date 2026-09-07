@@ -87,6 +87,36 @@ def _validate_contract(config):
     if not streams.get('rgb') or not streams.get('depth'):
         raise ValueError('the workspace camera must enable RGB and depth')
 
+    presentation = config.get('presentation')
+    if presentation is not None:
+        if presentation.get('visual_only') is not True:
+            raise ValueError('presentation scenery must be explicitly visual_only')
+        spectator = presentation.get('spectator_camera', {})
+        eye = spectator.get('eye', [])
+        target = spectator.get('target', [])
+        if len(eye) != 3 or len(target) != 3:
+            raise ValueError('spectator camera eye and target must be XYZ triples')
+        if not all(math.isfinite(float(value)) for value in eye + target):
+            raise ValueError('spectator camera values must be finite')
+        if eye == target:
+            raise ValueError('spectator camera eye and target must differ')
+
+        backdrop = presentation.get('studio_backdrop', {})
+        color = backdrop.get('color_rgb', [])
+        if backdrop.get('enabled', False):
+            if len(color) != 3 or not all(0.0 <= float(c) <= 1.0 for c in color):
+                raise ValueError('studio backdrop color must be normalized RGB')
+            panels = backdrop.get('panels', [])
+            if not panels:
+                raise ValueError('enabled studio backdrop requires panels')
+            for panel in panels:
+                if not panel.get('prim_path', '').startswith('/World/Presentation/'):
+                    raise ValueError('presentation panels must stay under /World/Presentation')
+                if len(panel.get('center', [])) != 3 or len(panel.get('size', [])) != 3:
+                    raise ValueError('presentation panel center and size must be XYZ triples')
+                if not all(float(value) > 0.0 for value in panel['size']):
+                    raise ValueError('presentation panel sizes must be positive')
+
     return {
         'camera_streams': ['rgb', 'depth'],
         'cube_count': len(cubes),
@@ -136,6 +166,39 @@ def _create_box(
             'vgm:objectId', Sdf.ValueTypeNames.String
         )
         attribute.Set(object_id)
+
+
+def _create_visual_box(stage, prim_path, center, size, color):
+    """Create a presentation-only box with no collision or rigid-body API."""
+    from pxr import Gf, UsdGeom
+
+    box = UsdGeom.Cube.Define(stage, prim_path)
+    box.CreateSizeAttr(1.0)
+    box.CreateDisplayColorAttr([Gf.Vec3f(*color)])
+    xformable = UsdGeom.Xformable(box.GetPrim())
+    xformable.AddTranslateOp().Set(Gf.Vec3d(*center))
+    xformable.AddScaleOp().Set(Gf.Vec3f(*size))
+
+
+def _create_presentation(stage, config):
+    """Author non-physical studio scenery used only by the spectator view."""
+    from pxr import UsdGeom
+
+    presentation = config.get('presentation', {})
+    backdrop = presentation.get('studio_backdrop', {})
+    if not backdrop.get('enabled', False):
+        return
+
+    UsdGeom.Xform.Define(stage, '/World/Presentation')
+    color = backdrop['color_rgb']
+    for panel in backdrop.get('panels', []):
+        _create_visual_box(
+            stage,
+            panel['prim_path'],
+            panel['center'],
+            panel['size'],
+            color,
+        )
 
 
 def _create_physics(stage, config):
@@ -322,6 +385,7 @@ def _author_scene(config):
 
     _create_physics(stage, config)
     _create_static_workspace(stage, config)
+    _create_presentation(stage, config)
     _create_robot(stage, config, assets_root)
     _create_cubes(stage, config)
     _create_target_markers(stage, config)

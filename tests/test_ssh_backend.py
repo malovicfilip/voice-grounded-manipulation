@@ -37,6 +37,29 @@ class SSHClockTests(unittest.TestCase):
                 with self.assertRaises(RuntimeError):
                     backend.request("capture")
 
+    def test_remote_repository_root_is_configurable_and_shell_safe(self):
+        backend = SSHBackend(
+            "fixture",
+            remote_root="/home/ubuntu/voice-grounded-manipulation",
+        )
+        with patch(
+            "vgm_runtime.ssh_backend.subprocess.run",
+            return_value=self.response(1000.0),
+        ) as run:
+            backend.request("robot_state")
+        script = run.call_args.args[0][-1]
+        self.assertIn(
+            "cd /home/ubuntu/voice-grounded-manipulation &&", script
+        )
+        self.assertIn(
+            "PYTHONPATH=/home/ubuntu/voice-grounded-manipulation/ros2_ws/src/vgm_runtime",
+            script,
+        )
+
+        for unsafe in ("relative/path", "/tmp/../workspace", "/tmp/root;rm", "/tmp//root"):
+            with self.assertRaises(ValueError):
+                SSHBackend("fixture", remote_root=unsafe)
+
     def test_unobserved_clock_cannot_authorize_a_task(self):
         with self.assertRaises(RuntimeError):
             SSHBackend("fixture").clock()

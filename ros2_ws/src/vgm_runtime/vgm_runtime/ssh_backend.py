@@ -13,12 +13,25 @@ from .serialization import scene_from_mapping
 
 
 class SSHBackend:
-    def __init__(self, session: str, *, host: str = "vgm-isaac-dev"):
+    def __init__(
+        self,
+        session: str,
+        *,
+        host: str = "vgm-isaac-dev",
+        remote_root: str = "/home/ubuntu/workspace",
+    ):
         if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}", session):
             raise ValueError("invalid session name")
         if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,100}", host):
             raise ValueError("invalid SSH host alias")
+        if (
+            not re.fullmatch(r"/[A-Za-z0-9._/-]{1,255}", remote_root)
+            or ".." in remote_root.split("/")
+            or "//" in remote_root
+        ):
+            raise ValueError("invalid remote repository root")
         self.session, self.host = session, host
+        self.remote_root = remote_root.rstrip("/")
         self._clock_anchor = None
 
     def clock(self):
@@ -34,12 +47,14 @@ class SSHBackend:
         return server_time + (time.monotonic() - received_monotonic)
 
     def request(self, operation: str, **fields):
+        root = shlex.quote(self.remote_root)
+        pythonpath = shlex.quote(self.remote_root + "/ros2_ws/src/vgm_runtime")
         script = (
-            "cd /home/ubuntu/workspace && "
+            f"cd {root} && "
             "export FASTRTPS_DEFAULT_PROFILES_FILE=/home/ubuntu/IsaacSim-ros_workspaces/jazzy_ws/fastdds.xml && "
             "/home/ubuntu/.pixi/bin/pixi run --manifest-path ros2_ws/pixi.toml "
             "bash -c 'source ros2_ws/install/setup.bash; "
-            "export PYTHONPATH=/home/ubuntu/workspace/ros2_ws/src/vgm_runtime; "
+            f"export PYTHONPATH={pythonpath}; "
             "exec python -m vgm_runtime.session_backend \"$1\"' bash " + shlex.quote(self.session)
         )
         completed = subprocess.run(

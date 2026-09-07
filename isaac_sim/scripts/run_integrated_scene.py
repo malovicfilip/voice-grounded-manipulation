@@ -213,10 +213,11 @@ def main() -> int:
     stage, camera_sensor = _author_scene(config)
     robot_path = config["robot"]["prim_path"]
     _create_ros_action_graph(robot_path)
+    spectator = config.get("presentation", {}).get("spectator_camera", {})
     ViewportManager.set_camera_view(
         "/OmniverseKit_Persp",
-        eye=np.asarray([1.2, 1.2, 1.25]),
-        target=np.asarray([0.0, 0.0, 0.75]),
+        eye=np.asarray(spectator.get("eye", [1.2, 1.2, 1.25])),
+        target=np.asarray(spectator.get("target", [0.0, 0.0, 0.75])),
     )
     simulation_app.update()
     stage_utils.save_stage(str(output_directory / "integrated_scene.usd"))
