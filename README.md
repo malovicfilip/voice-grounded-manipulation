@@ -73,9 +73,11 @@ backdrop. Those prims have no collision or rigid-body API and do not alter the
 `/World/WorkspaceCamera` RGB-D sensor used for grounding and outcome verification.
 
 The dashboard stays bound to `127.0.0.1` and embeds the existing Isaac viewer in
-the same page. It does not make the viewer public, start cloud compute, or relax
-streaming firewall rules. See [Demo dashboard](docs/demo_dashboard.md) and
-[Interactive viewing](docs/live_view.md).
+the same page. The live simulator is deliberately the dominant surface: mission
+controls sit directly below it, while execution, world-state, completion, and safety
+telemetry live in a compact right rail. It does not make the viewer public, start
+cloud compute, or relax streaming firewall rules. See
+[Demo dashboard](docs/demo_dashboard.md) and [Interactive viewing](docs/live_view.md).
 
 ## What the LLM controls
 
@@ -125,11 +127,15 @@ The agent may choose among bounded capabilities such as:
 
 The deterministic supervisor computes the exact options available **for the current
 state**. `finish` is not a model assertion: it is offered only after every
-operator-confirmed completion condition is deterministically satisfied. For example,
-a transfer condition requires fresh scene geometry to show the confirmed object on
-the confirmed target. After a standalone `pick`, the model is not offered another
-pick, a named-pose motion, or `finish`; it can only place the held object, request
-human help, or stop.
+operator-confirmed completion condition is deterministically satisfied. Placement
+completion normally uses a fresh visible target observation. When the placed cube
+physically occludes the target marker, the verifier may instead retain the fresh
+pre-execution RGB-D target measurement, but only after two detached resting-object
+frames geometrically prove that the cube itself explains the occlusion. The accepted
+placement pose is then carried into the next fresh semantic observation so target
+occlusion cannot leave the agent stuck in `running`. After a standalone `pick`, the
+model is not offered another pick, a named-pose motion, or `finish`; it can only place
+the held object, request human help, or stop.
 
 The LLM is never allowed to supply:
 
@@ -198,7 +204,9 @@ Important properties:
   excessive drift.
 - Released objects remain collision obstacles during retreat.
 - Successful placement requires fresh two-frame 3D/rest evidence and detached
-  robot state.
+  robot state. If the placed cube occludes the visual target marker, acceptance uses
+  only the fresh execution-gate target measurement (never authored/spawn coordinates)
+  and a stricter overlap test in both rest frames.
 - A physical execution failure does **not** trigger autonomous LLM retry. The
   agent faults and requests cancellation; recovery remains explicit.
 - Mission confirmation expires, action count is bounded, and budget exhaustion
@@ -272,7 +280,7 @@ if even passive RGB-D capture is undesirable during a diagnostic run.
 | --- | --- |
 | September 4, 2026 simulation campaign | Six historical live suites passed: invalid requests, cancellation, fault recovery, clarification, spoken manipulation, and a confirmed multi-step task. |
 | Historical placement examples | Two runs measured 3.98 mm and 5.04 mm **planar** error. These are individual examples, not an accuracy benchmark. |
-| Current offline regression suite | **147 automated tests pass** in this repository, including the original 125 tests plus 22 closed-loop agent/dashboard safety tests. |
+| Current offline regression suite | **155 automated tests pass** in this working tree, including the original 125 tests plus 30 closed-loop agent, dashboard, presentation, and post-place outcome regressions. |
 | Current static checks | Python compilation, shell syntax, browser JavaScript syntax, JSON parsing, and scene-contract validation pass. |
 | Pending live acceptance | The latest release/retreat safety changes still require a fresh full live manipulation campaign. The new closed-loop agent layer also requires live acceptance before being represented as live-validated. |
 

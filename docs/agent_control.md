@@ -148,7 +148,12 @@ Then:
 3. The backend captures again immediately before motion.
 4. The existing execution gate rejects stale state or excess drift.
 5. Deterministic geometry and policy offsets are used to invoke MoveIt.
-6. Placement uses the existing two-frame outcome verification.
+6. Placement uses two-frame outcome verification. A final target marker may be
+   occluded by the placed cube only when both resting object observations overlap the
+   fresh pre-execution target measurement tightly enough to explain that occlusion;
+   authored target coordinates are never substituted. The accepted placement evidence
+   remains available to deterministic completion logic until a fresh object observation
+   drifts beyond policy.
 
 The agent cannot mint a `ValidatedSkill`, edit collision objects, or call a joint
 controller directly.

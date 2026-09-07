@@ -229,6 +229,82 @@ class AgentControlTests(unittest.TestCase):
         )
         self.assertIn("finish", {item["capability"] for item in after})
 
+
+
+    def test_agent_finishes_from_verified_placement_when_target_becomes_occluded(self):
+        class OccludingBackend(Backend):
+            def __init__(inner_self):
+                super().__init__()
+                inner_self.occluded = False
+
+            def capture(inner_self):
+                scene = super(OccludingBackend, inner_self).capture()
+                if inner_self.occluded:
+                    return replace(scene, targets={key: value for key, value in scene.targets.items() if key != "blue_target"})
+                return scene
+
+            def execute(inner_self, proposal, scene):
+                result = super(OccludingBackend, inner_self).execute(proposal, scene)
+                if proposal["skill"] in {"place", "pick_and_place"}:
+                    inner_self.occluded = True
+                    result["outcome"] = {
+                        "status": "accepted",
+                        "object_id": proposal["object_id"],
+                        "target_id": proposal["target_id"],
+                        "detached": True,
+                        "object_position_m": list(inner_self.positions[proposal["object_id"]]),
+                        "target_final_visibility": "occluded_by_placed_object",
+                    }
+                return result
+
+        backend = OccludingBackend()
+        session = AgentSession(
+            MissionModel(),
+            ActionModel([act("pick_and_place", "red_cube", "blue_target"), act("finish")]),
+            backend,
+            self.audit,
+        )
+        pending = session.prepare("Put red on blue")
+        result = session.confirm(pending["confirmation"])
+        self.assertEqual(result["status"], "completed", result)
+        self.assertEqual(result["timeline"][0]["status"], "succeeded")
+        self.assertEqual(result["timeline"][1]["status"], "completed")
+
+    def test_verified_placement_can_complete_when_target_is_occluded_after_release(self):
+        scene = self.backend.capture()
+        raw = MissionModel().propose("move red", scene, load_json_config("safety_policy.json"))
+        mission = validate_mission(
+            raw, scene, load_json_config("safety_policy.json"), load_json_config("agent_policy.json"),
+            now_s=scene.captured_at_s,
+        )
+        placed_position = (0.0, 0.3, 0.775)
+        occluded = replace(
+            scene,
+            targets={},
+            objects={**scene.objects, "red_cube": replace(scene.objects["red_cube"], position_m=placed_position)},
+        )
+        verified = {("red_cube", "blue_target"): placed_position}
+        status = completion_status(
+            mission, occluded, load_json_config("safety_policy.json"), set(),
+            verified_placements=verified, now_s=scene.captured_at_s,
+        )
+        self.assertTrue(status[0]["satisfied"])
+        options = capability_options(
+            occluded, mission, load_json_config("safety_policy.json"), load_json_config("agent_policy.json"),
+            remaining_actions=2, verified_placements=verified, now_s=scene.captured_at_s,
+        )
+        self.assertIn("finish", {item["capability"] for item in options})
+
+        moved = replace(
+            occluded,
+            objects={**occluded.objects, "red_cube": replace(occluded.objects["red_cube"], position_m=(0.03, 0.3, 0.775))},
+        )
+        status = completion_status(
+            mission, moved, load_json_config("safety_policy.json"), set(),
+            verified_placements=verified, now_s=scene.captured_at_s,
+        )
+        self.assertFalse(status[0]["satisfied"])
+
     def test_dishonest_early_finish_is_rejected_without_motion(self):
         session = self.session([act("finish")])
         result = self.prepare_confirm(session)

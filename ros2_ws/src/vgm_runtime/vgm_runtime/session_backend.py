@@ -231,9 +231,22 @@ class SimulatorSession:
                     # Preserve refused outcomes too; failure evidence must not
                     # disappear merely because the confidence/error gate fails.
                     write_json(work / "final_scene.json", final_scene.to_mapping())
-                    result["outcome"] = validate_placement_outcome(
-                        {"validated_skill": proposal, "target_position_m": target}, final_scene,
-                        self.policy, previous_scene=previous_scene)
+                    try:
+                        result["outcome"] = validate_placement_outcome(
+                            {"validated_skill": proposal, "target_position_m": target}, final_scene,
+                            self.policy, previous_scene=previous_scene)
+                    except Exception as error:
+                        # Preserve a machine-readable result even when deterministic
+                        # outcome verification refuses the placement. The exception
+                        # is still re-raised below so STOP/recovery semantics remain
+                        # exactly as conservative as before.
+                        result.update(
+                            status="failed",
+                            code=getattr(error, "code", "outcome_verification_failed"),
+                            message=str(error),
+                        )
+                        write_json(work / "result.json", result)
+                        raise
                     hints[proposal["object_id"]] = list(final_scene.objects[proposal["object_id"]].position_m)
                     state["expected_positions"] = hints
                     write_json(self.directory / "session_state.json", state)

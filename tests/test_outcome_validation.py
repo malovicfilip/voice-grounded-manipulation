@@ -52,6 +52,55 @@ class OutcomeValidationTest(unittest.TestCase):
         self.assertEqual(result["status"], "accepted")
         self.assertLess(result["error_m"], 0.03)
 
+
+    def test_accepts_target_occluded_by_placed_cube_using_fresh_preexecution_pose(self):
+        final = final_scene(position=(0.004, 0.300, 0.776))
+        final = replace(final, targets={})
+        previous = replace(
+            final, captured_at_s=1.0,
+            objects={"red_cube": replace(final.objects["red_cube"], observed_at_s=1.0)},
+        )
+        execution = {
+            **EXECUTION,
+            "target_position_m": (0.0, 0.3, 0.751),
+        }
+        result = validate_placement_outcome(
+            execution, final, POLICY, previous_scene=previous, clock=lambda: 2.0
+        )
+        self.assertEqual(result["status"], "accepted")
+        self.assertEqual(result["target_final_visibility"], "occluded_by_placed_object")
+        self.assertEqual(result["target_reference"], "pre_execution_observation")
+        self.assertLess(result["target_occlusion_xy_error_m"], 0.01)
+
+    def test_missing_target_fallback_requires_geometric_occlusion_evidence(self):
+        final = final_scene(position=(0.05, 0.300, 0.776))
+        final = replace(final, targets={})
+        previous = replace(
+            final, captured_at_s=1.0,
+            objects={"red_cube": replace(final.objects["red_cube"], observed_at_s=1.0)},
+        )
+        execution = {
+            **EXECUTION,
+            "target_position_m": (0.0, 0.3, 0.751),
+        }
+        with self.assertRaises(OutcomeValidationError) as raised:
+            validate_placement_outcome(
+                execution, final, POLICY, previous_scene=previous, clock=lambda: 2.0
+            )
+        self.assertEqual(raised.exception.code, "target_occlusion_unverified")
+
+    def test_missing_target_without_measured_execution_reference_is_rejected(self):
+        final = replace(final_scene(position=(0.004, 0.300, 0.776)), targets={})
+        previous = replace(
+            final, captured_at_s=1.0,
+            objects={"red_cube": replace(final.objects["red_cube"], observed_at_s=1.0)},
+        )
+        with self.assertRaises(OutcomeValidationError) as raised:
+            validate_placement_outcome(
+                EXECUTION, final, POLICY, previous_scene=previous, clock=lambda: 2.0
+            )
+        self.assertEqual(raised.exception.code, "target_not_observed")
+
     def test_rejects_missing_low_confidence_and_misplaced_cube(self):
         cases = [
             (GroundedScene("0123456789abcdef", 1.0, {}), "object_not_observed"),

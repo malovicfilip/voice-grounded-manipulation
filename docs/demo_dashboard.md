@@ -2,7 +2,10 @@
 
 The root `./demo` launcher provides one browser surface for command entry, mission
 or task review, STOP/recovery, agent decisions, semantic state, and the Isaac viewer.
-The HTTP command bridge remains loopback-only.
+The live simulator is the primary visual surface rather than a small card: on desktop
+it occupies the main workspace, mission controls sit immediately below it, and a
+compact right rail carries execution history, grounded world state, completion
+conditions, and the safety boundary. The HTTP command bridge remains loopback-only.
 
 ## Quick local sandbox
 
@@ -149,8 +152,11 @@ cannot silently clear the stop state.
 3. Confirm the mission.
 4. Watch fresh semantic observations and one-step LLM decisions in the timeline.
 5. `finish` becomes selectable only after the confirmed completion conditions are
-   deterministically satisfied. The run otherwise continues until the model asks for
-   help, STOP/fault occurs, or the action budget is exhausted.
+   deterministically satisfied. A placement can remain complete when the cube occludes
+   its target marker because the two-frame outcome verifier records a verified placement
+   pose and the next fresh object observation must remain within the normal drift bound.
+   The run otherwise continues until the model asks for help, STOP/fault occurs, or the
+   action budget is exhausted.
 
 ### Task mode
 

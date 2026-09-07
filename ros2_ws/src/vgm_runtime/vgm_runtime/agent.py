@@ -427,6 +427,7 @@ def completion_status(
     safety_policy: Mapping[str, Any],
     completed_markers: set[str] | frozenset[str],
     *,
+    verified_placements: Mapping[tuple[str, str], tuple[float, float, float]] | None = None,
     now_s: float | None = None,
     _validator: SkillValidator | None = None,
 ) -> list[dict[str, Any]]:
@@ -439,12 +440,15 @@ def completion_status(
         if condition.kind == "object_on_target":
             object_observation = scene.objects.get(condition.object_id) if condition.object_id else None
             target_observation = scene.targets.get(condition.target_id) if condition.target_id else None
-            satisfied = (
+            object_usable = (
                 scene_usable
                 and scene.held_object_id != condition.object_id
                 and _observation_is_usable(
                     object_observation, scene, safety_policy, "object", now_s=now_s, validator=validator
                 )
+            )
+            visible_target_satisfied = (
+                object_usable
                 and _observation_is_usable(
                     target_observation, scene, safety_policy, "target", now_s=now_s, validator=validator
                 )
@@ -452,6 +456,17 @@ def completion_status(
                     scene, condition.target_id, safety_policy, now_s=now_s, validator=validator
                 ) == condition.object_id
             )
+            verified_satisfied = False
+            if object_usable and condition.object_id and condition.target_id and verified_placements:
+                verified_position = verified_placements.get((condition.object_id, condition.target_id))
+                if verified_position is not None:
+                    verified_satisfied = (
+                        len(verified_position) == 3
+                        and all(type(value) in (int, float) and math.isfinite(value) for value in verified_position)
+                        and math.dist(object_observation.position_m, verified_position)
+                        <= float(safety_policy["maximum_object_drift_m"])
+                    )
+            satisfied = visible_target_satisfied or verified_satisfied
         elif condition.kind == "object_inspected":
             satisfied = scene_usable and _completion_marker("object_inspected", condition.object_id) in completed_markers
         elif condition.kind == "workspace_observed":
@@ -468,11 +483,13 @@ def mission_satisfied(
     safety_policy: Mapping[str, Any],
     completed_markers: set[str] | frozenset[str],
     *,
+    verified_placements: Mapping[tuple[str, str], tuple[float, float, float]] | None = None,
     now_s: float | None = None,
     _validator: SkillValidator | None = None,
 ) -> bool:
     statuses = completion_status(
-        mission, scene, safety_policy, completed_markers, now_s=now_s, _validator=_validator
+        mission, scene, safety_policy, completed_markers, verified_placements=verified_placements,
+        now_s=now_s, _validator=_validator
     )
     return bool(statuses) and all(item["satisfied"] for item in statuses)
 
@@ -485,6 +502,7 @@ def capability_options(
     *,
     remaining_actions: int,
     completed_markers: set[str] | frozenset[str] = frozenset(),
+    verified_placements: Mapping[tuple[str, str], tuple[float, float, float]] | None = None,
     now_s: float | None = None,
     _validator: SkillValidator | None = None,
 ) -> list[dict[str, Any]]:
@@ -533,7 +551,8 @@ def capability_options(
         return options
 
     if mission_satisfied(
-        mission, scene, safety_policy, completed_markers, now_s=now_s, _validator=validator
+        mission, scene, safety_policy, completed_markers, verified_placements=verified_placements,
+        now_s=now_s, _validator=validator
     ):
         add("finish")
     add("observe_workspace")
@@ -646,6 +665,8 @@ def semantic_result(result: Mapping[str, Any] | None) -> dict[str, Any] | None:
             "object_id": outcome.get("object_id"),
             "target_id": outcome.get("target_id"),
             "detached": outcome.get("detached"),
+            "target_final_visibility": outcome.get("target_final_visibility"),
+            "target_reference": outcome.get("target_reference"),
         }
     return output
 
@@ -659,6 +680,7 @@ def semantic_agent_input(
     action_index: int,
     last_result: Mapping[str, Any] | None,
     completed_markers: set[str] | frozenset[str] = frozenset(),
+    verified_placements: Mapping[tuple[str, str], tuple[float, float, float]] | None = None,
     now_s: float | None = None,
 ) -> dict[str, Any]:
     remaining = mission.max_actions - action_index
@@ -679,11 +701,13 @@ def semantic_agent_input(
         ),
         "last_result": semantic_result(last_result),
         "completion_status": completion_status(
-            mission, scene, safety_policy, completed_markers, now_s=now_s, _validator=validator
+            mission, scene, safety_policy, completed_markers, verified_placements=verified_placements,
+            now_s=now_s, _validator=validator
         ),
         "allowed_capabilities": capability_options(
             scene, mission, safety_policy, agent_policy, remaining_actions=remaining,
-            completed_markers=completed_markers, now_s=now_s, _validator=validator,
+            completed_markers=completed_markers, verified_placements=verified_placements,
+            now_s=now_s, _validator=validator,
         ),
     }
 
@@ -826,6 +850,7 @@ class AgentSession:
         timeline: list[dict[str, Any]] = []
         last_result: Mapping[str, Any] | None = None
         completed_markers: set[str] = set()
+        verified_placements: dict[tuple[str, str], tuple[float, float, float]] = {}
         try:
             for index in range(mission.max_actions):
                 if self._stop.is_set():
@@ -836,7 +861,7 @@ class AgentSession:
                 semantic = semantic_agent_input(
                     mission, scene, self.safety_policy, self.agent_policy,
                     action_index=index, last_result=last_result, completed_markers=completed_markers,
-                    now_s=self.clock(),
+                    verified_placements=verified_placements, now_s=self.clock(),
                 )
                 self._emit("agent_observation", {"mission_id": mission.request_id, **semantic})
                 if self._stop.is_set():
@@ -882,7 +907,8 @@ class AgentSession:
                     if scene.held_object_id is not None:
                         raise AgentValidationError("finish_while_holding", "agent cannot finish while holding an object")
                     if not mission_satisfied(
-                        mission, scene, self.safety_policy, completed_markers, now_s=self.clock()
+                        mission, scene, self.safety_policy, completed_markers,
+                        verified_placements=verified_placements, now_s=self.clock()
                     ):
                         raise AgentValidationError("goal_not_satisfied", "agent cannot finish before the confirmed completion conditions are satisfied")
                     self.state = "completed"
@@ -916,6 +942,18 @@ class AgentSession:
                 })
                 if result.get("status") != "succeeded":
                     raise RuntimeError(f"robot capability failed: {result.get('code', 'backend_failure')}")
+                if capability in {"place", "pick_and_place"}:
+                    outcome = result.get("outcome")
+                    if isinstance(outcome, Mapping) and outcome.get("status") == "accepted":
+                        object_position = outcome.get("object_position_m")
+                        if (
+                            action.get("object_id")
+                            and action.get("target_id")
+                            and isinstance(object_position, list)
+                            and len(object_position) == 3
+                            and all(type(value) in (int, float) and math.isfinite(value) for value in object_position)
+                        ):
+                            verified_placements[(action["object_id"], action["target_id"])] = tuple(object_position)
                 if capability == "inspect":
                     completed_markers.add(_completion_marker("object_inspected", action["object_id"]))
                 elif capability == "move_named_pose":

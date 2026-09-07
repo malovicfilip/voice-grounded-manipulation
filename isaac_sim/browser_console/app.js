@@ -45,14 +45,114 @@ function renderReplayScene(scene) {
 function renderTimeline() {
   const host = $('timeline'); host.replaceChildren();
   const timeline = state.timeline || [];
-  if (!timeline.length) { const empty = document.createElement('span'); empty.className='muted'; empty.textContent='No decisions yet.'; host.append(empty); return; }
-  for (const event of timeline) {
-    const box = document.createElement('div'); box.className = `event ${event.status || ''}`;
+  $('timelineCount').textContent = `${timeline.length} ${timeline.length === 1 ? 'step' : 'steps'}`;
+  if (!timeline.length) {
+    const empty = document.createElement('span'); empty.className='empty'; empty.textContent='No decisions yet.'; host.append(empty); return;
+  }
+  for (const [offset, event] of timeline.entries()) {
+    const box = document.createElement('div');
+    box.className = `event ${event.status || ''}`;
+    box.dataset.step = String((event.index ?? offset) + 1).padStart(2, '0');
     const title = document.createElement('strong');
-    const parts = [event.capability || event.skill, event.object_id, event.target_id ? `→ ${event.target_id}` : '', event.pose_name].filter(Boolean);
-    title.textContent = parts.join(' · ') || 'step'; box.append(title);
-    const info = document.createElement('small'); info.textContent = `${event.status || 'selected'}${event.reason ? ' — ' + event.reason : ''}`; box.append(info);
+    const capability = (event.capability || event.skill || 'step').replaceAll('_', ' ');
+    const motion = [event.object_id, event.target_id ? `→ ${event.target_id}` : '', event.pose_name].filter(Boolean).join(' ');
+    title.textContent = motion ? `${capability} · ${motion}` : capability;
+    box.append(title);
+    const info = document.createElement('small');
+    const status = (event.status || 'selected').replaceAll('_', ' ');
+    info.textContent = `${status}${event.reason ? ' — ' + event.reason : ''}`;
+    box.append(info);
     host.append(box);
+  }
+}
+
+function addWorldItem(host, name, flags) {
+  const item = document.createElement('div'); item.className = 'world-item';
+  const label = document.createElement('div'); label.className = 'world-name'; label.textContent = name; item.append(label);
+  const flagHost = document.createElement('div'); flagHost.className = 'world-flags';
+  for (const {text, tone=''} of flags) {
+    const flag = document.createElement('span'); flag.className = `flag ${tone}`; flag.textContent = text; flagHost.append(flag);
+  }
+  item.append(flagHost); host.append(item);
+}
+
+function renderSemantic() {
+  const semantic = state.semantic_state;
+  const scene = semantic?.scene;
+  const objectsHost = $('worldObjects'); objectsHost.replaceChildren();
+  const targetsHost = $('worldTargets'); targetsHost.replaceChildren();
+  const completionHost = $('completion'); completionHost.replaceChildren();
+  const capabilitiesHost = $('capabilities'); capabilitiesHost.replaceChildren();
+
+  if (!scene) {
+    $('sceneFresh').innerHTML = '<span class="dot"></span>waiting';
+    $('heldObject').textContent = 'gripper —';
+    const empty = document.createElement('span'); empty.className='empty'; empty.textContent='No semantic observation yet.'; objectsHost.append(empty);
+    const completionEmpty = document.createElement('span'); completionEmpty.className='empty'; completionEmpty.textContent='No completion contract yet.'; completionHost.append(completionEmpty);
+    $('semantic').textContent = 'No semantic observation yet.';
+    return;
+  }
+
+  const fresh = Boolean(scene.scene_fresh);
+  $('sceneFresh').replaceChildren();
+  const dot = document.createElement('span'); dot.className = `dot ${fresh ? 'ok' : 'bad'}`; $('sceneFresh').append(dot, document.createTextNode(fresh ? 'fresh scene' : 'stale scene'));
+  $('heldObject').textContent = scene.held_object_id ? `holding ${scene.held_object_id}` : 'gripper empty';
+
+  for (const object of scene.objects || []) {
+    const flags = [];
+    flags.push({text: object.grounded ? 'grounded' : (object.visible ? 'visible' : 'missing'), tone: object.grounded ? 'good' : 'warn'});
+    if (object.held) flags.push({text:'held', tone:'warn'});
+    if (object.confidence && object.confidence !== 'unavailable') flags.push({text: object.confidence, tone: object.confidence === 'low' ? 'warn' : ''});
+    addWorldItem(objectsHost, object.object_id, flags);
+  }
+  if (!(scene.objects || []).length) {
+    const empty = document.createElement('span'); empty.className='empty'; empty.textContent='No mission objects.'; objectsHost.append(empty);
+  }
+
+  for (const target of scene.targets || []) {
+    const flags = [];
+    flags.push({text: target.grounded ? 'grounded' : (target.visible ? 'visible' : 'occluded'), tone: target.grounded ? 'good' : 'warn'});
+    if (target.occupied_by) flags.push({text: `occupied: ${target.occupied_by}`, tone:'good'});
+    if (target.confidence && target.confidence !== 'unavailable') flags.push({text: target.confidence, tone: target.confidence === 'low' ? 'warn' : ''});
+    addWorldItem(targetsHost, target.target_id, flags);
+  }
+  if (!(scene.targets || []).length) {
+    const empty = document.createElement('span'); empty.className='empty'; empty.textContent='No mission targets.'; targetsHost.append(empty);
+  }
+
+  const completion = semantic.completion_status || [];
+  if (!completion.length) {
+    const empty = document.createElement('span'); empty.className='empty'; empty.textContent='No completion contract yet.'; completionHost.append(empty);
+  } else {
+    for (const condition of completion) {
+      const item = document.createElement('div'); item.className = `completion-item ${condition.satisfied ? 'done' : ''}`;
+      const mark = document.createElement('span'); mark.className = 'completion-mark';
+      const text = document.createElement('span'); text.textContent = conditionLabel(condition).replace(/^complete:\s*/, '');
+      item.append(mark, text); completionHost.append(item);
+    }
+  }
+
+  for (const option of semantic.allowed_capabilities || []) {
+    capabilitiesHost.append(chip((option.capability || 'unknown').replaceAll('_',' ')));
+  }
+  if (!(semantic.allowed_capabilities || []).length) {
+    const empty = document.createElement('span'); empty.className='empty'; empty.textContent='No actions currently exposed.'; capabilitiesHost.append(empty);
+  }
+  $('semantic').textContent = JSON.stringify(semantic, null, 2);
+}
+
+function renderMissionSummary() {
+  $('missionStatus').textContent = recording ? 'Recording voice' : (state.status || 'Connecting…').replaceAll('_',' ');
+  $('missionGoal').textContent = state.mission?.goal_summary || (state.transcript ? 'Awaiting mission proposal' : 'No mission proposed');
+  const semantic = state.semantic_state;
+  if (semantic && Number.isInteger(semantic.action_index)) {
+    const used = semantic.action_index;
+    const max = state.mission?.max_actions;
+    $('missionProgress').textContent = max ? `${used} of ${max} decisions used · ${semantic.remaining_actions} remaining` : `${used} decisions used`;
+  } else if (state.timeline?.length) {
+    $('missionProgress').textContent = `${state.timeline.length} timeline ${state.timeline.length === 1 ? 'step' : 'steps'}`;
+  } else {
+    $('missionProgress').textContent = '—';
   }
 }
 
@@ -68,20 +168,20 @@ function render() {
   $('cancel').disabled = !(ready && pending);
   $('stop').disabled = !csrf || state.status === 'stopping';
   $('recover').disabled = !(ready && ['stopped','faulted'].includes(state.status));
-  $('confirm').textContent = config.control_mode === 'agent' ? 'Confirm mission & start agent' : 'Confirm & execute task';
-  $('status').textContent = recording ? 'Recording — speak now' : (state.status || 'Connecting…');
+  $('confirm').textContent = config.control_mode === 'agent' ? 'Confirm & run' : 'Confirm & execute';
+  $('status').textContent = recording ? 'Recording — speak now' : (state.status || 'Connecting…').replaceAll('_',' ');
   $('statusDot').className = `dot ${statusClass(state.status)}`;
   $('transcript').textContent = state.transcript || '—';
   $('message').textContent = state.message || '';
   $('goal').textContent = state.mission?.goal_summary || (config.control_mode === 'task' ? 'Planned task' : '—');
-  $('budget').textContent = state.mission?.max_actions ? `${state.mission.max_actions} decisions maximum` : '—';
+  $('budget').textContent = state.mission?.max_actions ? `${state.mission.max_actions} bounded decisions` : '—';
 
   $('scope').replaceChildren();
   if (state.mission) {
     $('scopeWrap').hidden = false;
-    for (const id of state.mission.object_ids || []) $('scope').append(chip(`object: ${id}`));
-    for (const id of state.mission.target_ids || []) $('scope').append(chip(`target: ${id}`));
-    for (const id of state.mission.pose_names || []) $('scope').append(chip(`pose: ${id}`));
+    for (const id of state.mission.object_ids || []) $('scope').append(chip(id));
+    for (const id of state.mission.target_ids || []) $('scope').append(chip(id));
+    for (const id of state.mission.pose_names || []) $('scope').append(chip(id));
     for (const condition of state.mission.success_conditions || []) $('scope').append(chip(conditionLabel(condition)));
   } else $('scopeWrap').hidden = true;
 
@@ -93,8 +193,10 @@ function render() {
       $('steps').append(li);
     }
   }
+
+  renderMissionSummary();
   renderTimeline();
-  $('semantic').textContent = state.semantic_state ? JSON.stringify(state.semantic_state, null, 2) : 'No semantic observation yet.';
+  renderSemantic();
   $('details').textContent = JSON.stringify(state, null, 2);
   $('error').textContent = $('error').textContent || '';
 
