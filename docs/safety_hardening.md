@@ -115,6 +115,34 @@ capture retained a red-cube center at approximately 0.900 m instead of forcing
 
 ## Deployment gate — required before claiming live acceptance
 
+### September 6 evening live regression: not accepted
+
+Session `safety-acceptance-v1` ran the deployed safety runtime. The corrected
+workstation acceptance runner passed boundary, live stop, and fault recovery
+with its deterministic provider (no LLM calls). Boundary rejection produced
+zero sampled joint change. The stop fixture observed 0.738 rad of joint change
+before cancellation, no following descent, and explicit recovery.
+
+The `inspect → pick → place → inspect` sequence **failed** after release, before
+retreat. MoveIt `CheckStartStateCollision` reported `panda_leftfinger - red_cube`
+and `panda_link0 - table`. The runtime cancelled and reported stationary with
+no attached object. No collision objects were removed to bypass the failure.
+The retained red-cube world box was approximately 0.05028 × 0.05036 × 0.06598 m;
+this includes the conservative settling envelope. A later RGB-D observation
+did not see the red cube or yellow target, so placement was not verified.
+
+This blocks acceptance: inspect the gripper/release collision geometry and
+settling model, then rerun in a fresh instrumented session. Do not assume a
+missing object was correctly placed, relax collision checking, or promote
+the sequence result to a pass. The other new live fixtures below remain pending.
+
+Reports remain in ignored `isaac_sim/_output/safety-{boundary-20260906-v2,
+stop-20260906,fault-20260906,sequence-20260906}.json`. Failed and corrected
+runner results are preserved separately. The workstation runner now tests
+current refusal messages, rejects unrelated transport failures, uses one
+capture for its fault-latch check, and cancels if the stop fixture raises.
+The updated local suite passed 124 tests, including three runner regressions.
+
 The initial WSL verification could not build the complete MoveIt nodes.
 On September 6, 2026, both packages were successfully built and deployed on
 Brev; 117 ROS-environment tests and four recording tests in the cached Isaac

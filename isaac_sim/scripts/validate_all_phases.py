@@ -9,6 +9,7 @@ import argparse
 import json
 from pathlib import Path
 import sys
+import subprocess
 import threading
 import time
 import uuid
@@ -45,9 +46,9 @@ def boundary(backend):
     }
     expected_refusals = {
         "direct_control": "direct-control fields are forbidden",
-        "unknown_skill": "skill is not allowlisted",
-        "missing_grounding": "object is not grounded",
-        "unknown_target": "target is not allowlisted",
+        "unknown_skill": "JSON Schema rejected skill",
+        "missing_grounding": "object is not allowlisted",
+        "unknown_target": "fresh perceived target is required",
     }
     for name, value in fixtures.items():
         # Renew only the fixture revision; every rejection traverses the live
@@ -69,6 +70,15 @@ def boundary(backend):
 
 
 def live_stop(backend):
+    try:
+        return _live_stop(backend)
+    except BaseException:
+        # Assertion, transport failure or Ctrl+C must not abandon live motion.
+        backend.stop()
+        raise
+
+
+def _live_stop(backend):
     scene = backend.capture()
     value = proposal(scene)
     initial = backend.request("robot_state")
@@ -128,9 +138,11 @@ def fault(backend):
     state = backend.request("robot_state")
     require(state["stationary"], "robot is moving after the backend fault")
     try:
-        backend.execute(proposal(backend.capture()), backend.capture())
-    except RuntimeError:
-        pass
+        latest = backend.capture()
+        backend.execute(proposal(latest), latest)
+    except RuntimeError as error:
+        require("session is stopped; explicit recovery is required" in str(error),
+                f"fault inhibit check failed for an unrelated reason: {error}")
     else:
         raise AssertionError("faulted session accepted motion without recovery")
     recovery = backend.recover()
@@ -207,7 +219,13 @@ def main():
     audit = AuditLogger(args.output.with_suffix(".audit.jsonl"))
     if args.provider == "openai":
         load_local_api_key()
+    revision = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT,
+                              capture_output=True, text=True, check=True).stdout.strip()
+    dirty = bool(subprocess.run(["git", "status", "--porcelain"], cwd=ROOT,
+                               capture_output=True, text=True, check=True).stdout.strip())
     report = {"session": args.session, "intent_provider": args.provider,
+              "runner_commit": revision, "runner_worktree_dirty": dirty,
+              "scope": "selected legacy integration suites; not full safety-hardening acceptance",
               "started_at_s": time.time(), "tests": {}}
     cases = {
         "boundary": lambda: boundary(backend),
